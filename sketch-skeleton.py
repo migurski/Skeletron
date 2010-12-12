@@ -16,7 +16,7 @@ def draw_edge(edge, img):
 def draw_ray(ray, img):
     """
     """
-    p1 = ray.point
+    p1 = ray.tail.point
     p2 = Point(p1.x + 10 * cos(ray.theta), p1.y + 10 * sin(ray.theta))
     
     draw = ImageDraw(img)
@@ -50,18 +50,37 @@ class Edge:
         
         return ray1, ray2
 
+class Tail:
+    """
+    """
+    def __init__(self, point, p_edge, n_edge, *tails):
+        self.point = point
+        self.tails = tails
+        self.p_edge = p_edge
+        self.n_edge = n_edge
+
+    def is_leaf(self):
+        return len(self.tails) == 0
+
+class Stub:
+    """
+    """
+    def __init__(self, point, p_edge, n_edge):
+        self.point = point
+        self.p_edge = p_edge
+        self.n_edge = n_edge
+
+    def is_leaf(self):
+        return True
+
 class Ray:
     """
     """
-    def __init__(self, point, theta, floor=0):
-        self.point = point
+    def __init__(self, tail, theta):
+        self.tail = tail
         self.theta = theta
-        self.floor = floor
-
-def merge_rays(r1, r2):
-    """
-    """
-    pass
+        
+        self.next, self.prev = None, None
 
 def polygon_edges(poly):
     """
@@ -78,21 +97,37 @@ def polygon_edges(poly):
     
     return edges
 
+def edge_rays(edges):
+    """
+    """
+    stubs, rays = [], []
+    
+    for (i, edge) in enumerate(edges):
+        j = (i + 1) % len(edges)
+        stub = Stub(edge.p1, edges[i], edges[j])
+        stubs.append(stub)
+
+    for stub in stubs:
+        ray = Ray(stub, 0)
+        rays.append(ray)
+
+    return rays
+
 if __name__ == '__main__':
     
     poly = Polygon(((150, 25), (250, 250), (50, 250)))
     
     edges = polygon_edges(poly)
+    rays = edge_rays(edges)
     
     img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
     
     for edge in edges:
         img = draw_edge(edge, img)
     
-    for edge in edges:
-        for ray in edge.rays():
-            img = draw_ray(ray, img)
-    
+    for ray in rays:
+        img = draw_ray(ray, img)
+
     #exit(1)
     
     img.save('skeleton.png')
