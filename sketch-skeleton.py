@@ -16,7 +16,7 @@ def draw_edge(edge, img):
 def draw_ray(ray, img):
     """
     """
-    p1 = ray.tail.point
+    p1 = ray.point
     p2 = Point(p1.x + 10 * cos(ray.theta), p1.y + 10 * sin(ray.theta))
     
     draw = ImageDraw(img)
@@ -38,6 +38,8 @@ class Edge:
     def __init__(self, p1, p2):
         self.p1 = p1
         self.p2 = p2
+        
+        self.theta = atan2(p2.y - p1.y, p2.x - p1.x)
 
     def rays(self):
         """
@@ -69,18 +71,44 @@ class Stub:
         self.point = point
         self.p_edge = p_edge
         self.n_edge = n_edge
+        self.theta = self._theta()
 
     def is_leaf(self):
         return True
 
+    def _theta(self):
+        p_theta = self.p_edge.theta + pi/2
+        n_theta = self.n_edge.theta + pi/2
+        
+        pdx, pdy = cos(p_theta), sin(p_theta)
+        ndx, ndy = cos(n_theta), sin(n_theta)
+        
+        dx, dy = (pdx + ndx) / 2, (pdy + ndy) / 2
+
+        theta = atan2(dy, dx)
+        
+        return theta
+
 class Ray:
     """
     """
-    def __init__(self, tail, theta):
-        self.tail = tail
-        self.theta = theta
+    def __init__(self, point, *tails):
+        self.point = point
+        self.tails = tails
+        self.theta = self._theta()
         
         self.next, self.prev = None, None
+
+    def _theta(self):
+        thetas = [tail.theta for tail in self.tails]
+        
+        xs, ys = map(cos, thetas), map(sin, thetas)
+        
+        dx, dy = sum(xs) / len(xs), sum(ys) / len(ys)
+        
+        theta = atan2(dy, dx)
+        
+        return theta
 
 def polygon_edges(poly):
     """
@@ -88,12 +116,17 @@ def polygon_edges(poly):
     assert poly.__class__ is Polygon, 'Polygon, not MultiPolygon'
     assert len(poly.interiors) == 0, 'No donut holes, either'
     
-    edges = []
+    points, edges = [], []
     
     for i in range(len(poly.exterior.coords) - 1):
-        p1 = Point(*poly.exterior.coords[i])
-        p2 = Point(*poly.exterior.coords[i + 1])
-        edges.append(Edge(p1, p2))
+        p = Point(*poly.exterior.coords[i])
+        points.append(p)
+    
+    for (i, p1) in enumerate(points):
+        j = (i + 1) % len(points)
+        p2 = points[j]
+        edge = Edge(p1, p2)
+        edges.append(edge)
     
     return edges
 
@@ -102,13 +135,13 @@ def edge_rays(edges):
     """
     stubs, rays = [], []
     
-    for (i, edge) in enumerate(edges):
-        j = (i + 1) % len(edges)
+    for (j, edge) in enumerate(edges):
+        i = (j - 1) % len(edges)
         stub = Stub(edge.p1, edges[i], edges[j])
         stubs.append(stub)
 
     for stub in stubs:
-        ray = Ray(stub, 0)
+        ray = Ray(stub.point, stub)
         rays.append(ray)
 
     return rays
