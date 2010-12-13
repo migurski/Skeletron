@@ -137,8 +137,9 @@ class Ray:
         return 'Ray ' + ('%x' % id(self))[4:]
 
     def _theta(self):
-        tails = [self.p_tail, self.n_tail]
-        thetas = [tail.theta for tail in tails]
+        n_theta = self.n_tail.n_edge.theta
+        p_theta = self.p_tail.p_edge.theta + pi
+        thetas = n_theta, p_theta
         return average_thetas(thetas)
 
 def polygon_edges(poly):
