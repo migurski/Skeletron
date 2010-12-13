@@ -1,5 +1,5 @@
 from sys import exit
-from math import pi, sin, cos, atan2, hypot
+from math import pi, sin, cos, tan, atan2, hypot
 
 from PIL import Image
 from PIL.ImageDraw import ImageDraw
@@ -61,17 +61,6 @@ class Edge:
         
         self.theta = atan2(p2.y - p1.y, p2.x - p1.x)
 
-    def rays(self):
-        """
-        """
-        p1, p2 = self.p1, self.p2
-        theta = atan2(p2.y - p1.y, p2.x - p1.x)
-        
-        ray1 = Ray(p1, theta + pi/2)
-        ray2 = Ray(p2, theta + pi/2)
-        
-        return ray1, ray2
-
 class Tail:
     """
     """
@@ -80,7 +69,6 @@ class Tail:
         self.tails = tails
         self.p_edge = p_edge
         self.n_edge = n_edge
-        self.theta = self._theta()
         
         ends = set([tail.end for tail in tails])
         assert len(ends) == 1, 'All the adjoined tails must share a common end'
@@ -95,10 +83,6 @@ class Tail:
     def is_leaf(self):
         return len(self.tails) <= 1
     
-    def _theta(self):
-        thetas = [tail.theta for tail in self.tails]
-        return average_thetas(thetas)
-    
 class Stub:
     """
     """
@@ -107,7 +91,6 @@ class Stub:
         self.p_edge = p_edge
         self.n_edge = n_edge
         self.length = 0
-        self.theta = self._theta()
         
         self.start = end
         self.tails = []
@@ -117,11 +100,6 @@ class Stub:
 
     def is_leaf(self):
         return True
-
-    def _theta(self):
-        p_theta = self.p_edge.theta + pi/2
-        n_theta = self.n_edge.theta + pi/2
-        return average_thetas((p_theta, n_theta))
 
 class Ray:
     """
@@ -137,9 +115,14 @@ class Ray:
 
     def _theta(self):
         n_theta = self.n_tail.n_edge.theta
-        p_theta = self.p_tail.p_edge.theta + pi
+        p_theta = self.p_tail.p_edge.theta
+    
+        if abs(tan(n_theta) - tan(p_theta)) < 0.000001:
+            # we have parallel edges
+            return n_theta
+
         thetas = n_theta, p_theta
-        return average_thetas(thetas)
+        return average_thetas(thetas) + pi/2
 
 def polygon_edges(poly):
     """
