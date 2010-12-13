@@ -1,13 +1,12 @@
-from sys import exit
 from math import pi, sin, cos, tan, atan2, hypot
 from operator import attrgetter
 
 from PIL import Image
 from PIL.ImageDraw import ImageDraw
-from shapely.geometry import Polygon, LineString
+from shapely.geometry import Polygon, LineString, Point as _Point
 
 def draw_edge(edge, img, drawn):
-    """
+    """ Draw an edge to an image, if it hasn't been drawn already.
     """
     if edge in drawn:
         return
@@ -18,7 +17,7 @@ def draw_edge(edge, img, drawn):
     drawn.add(edge)
 
 def draw_collision(collision, img, drawn):
-    """
+    """ Draw a collision and its rays to an image, if it hasn't been drawn already.
     """
     if collision in drawn:
         return
@@ -26,16 +25,19 @@ def draw_collision(collision, img, drawn):
     draw_ray(collision.p_ray, img, drawn)
     draw_ray(collision.n_ray, img, drawn)
     
+    if collision.point is None:
+        return
+    
     p = collision.point
     
     draw = ImageDraw(img)
-    draw.line([(p.x - 2, p.y - 2), (p.x + 2, p.y + 2)], fill=(0xCC, 0x00, 0x00), width=1)
-    draw.line([(p.x - 2, p.y + 2), (p.x + 2, p.y - 2)], fill=(0xCC, 0x00, 0x00), width=1)
+    draw.line([(p.x - 2, p.y - 2), (p.x + 2, p.y + 2)], fill=(0x99, 0x99, 0x99), width=1)
+    draw.line([(p.x - 2, p.y + 2), (p.x + 2, p.y - 2)], fill=(0x99, 0x99, 0x99), width=1)
     
     drawn.add(collision)
 
 def draw_ray(ray, img, drawn):
-    """
+    """ Draw a ray and its tails to an image, if it hasn't been drawn already.
     """
     if ray in drawn:
         return
@@ -53,7 +55,7 @@ def draw_ray(ray, img, drawn):
     drawn.add(ray)
 
 def draw_tail(tail, img, drawn):
-    """
+    """ Draw a tail and its tree of edges to an image, if it hasn't been drawn already.
     """
     if tail in drawn:
         return
@@ -73,7 +75,7 @@ def draw_tail(tail, img, drawn):
     drawn.add(tail)
 
 class Point:
-    """
+    """ Simple (x, y) point.
     """
     def __init__(self, x, y):
         self.x = x
@@ -83,16 +85,23 @@ class Point:
         return 'Point ' + ('%x (%.1f, %.1f)' % (id(self), self.x, self.y))[2:]
 
 class Edge:
+    """ Edge between two points.
+    
+        Includes points (p1, p2) and original containing polygon (poly).
     """
-    """
-    def __init__(self, p1, p2):
+    def __init__(self, p1, p2, poly):
         self.p1 = p1
         self.p2 = p2
+        self.poly = poly
         
         self.theta = atan2(p2.y - p1.y, p2.x - p1.x)
 
 class Tail:
-    """
+    """ A backwards-pointing length of traversed skeleton.
+    
+        Includes pointers to previous and next edges (p_edge, n_edge), a list
+        of preceding tails (tails), knows its own length (length), and has
+        start and end points (start, end).
     """
     def __init__(self, end, p_edge, n_edge, *tails):
         self.end = end
@@ -111,10 +120,12 @@ class Tail:
         return 'Tail ' + ('%x (%.1f, %s)' % (id(self), self.length, self.is_leaf()))[2:]
 
     def is_leaf(self):
+        """ True if the number of tails is zero or one.
+        """
         return len(self.tails) <= 1
     
 class Stub:
-    """
+    """ A tail that has no preceding tails, used to start from the edges.
     """
     def __init__(self, end, p_edge, n_edge):
         self.end = end
@@ -132,7 +143,10 @@ class Stub:
         return True
 
 class Ray:
-    """
+    """ A ray is a forward-pointing length of potential skeleton.
+    
+        Includes pointers to previous and next tails (p_tail, n_tail),
+        a starting point (start), and direction (theta).
     """
     def __init__(self, start, p_tail, n_tail):
         self.start = start
@@ -162,7 +176,11 @@ class Ray:
         return p_theta + rotation/2 + pi/2
 
 class Collision:
-    """
+    """ A collision is where two rays might potentially meet.
+    
+        Includes pointers to previous and next rays (p_ray, n_ray),
+        point of impact (point), and distance from one of the participating
+        edges to use for priority listing.
     """
     def __init__(self, p_ray, n_ray):
         self.p_ray = p_ray
@@ -204,22 +222,35 @@ class Collision:
         #   x = x2 + cos2 * t
         #   y = y2 + sin2 * t
         
-        x = (cos2*sin1*x1 - cos2*cos1*y1 - cos1*sin2*x2 + cos1*cos2*y2) / (cos2*sin1 - cos1*sin2)
-        y = (sin2*x - sin2*x2 + cos2*y2) / cos2
-        
-        p1, p2 = ray1.p_tail.p_edge.p1, ray1.p_tail.p_edge.p2
-        x1, y1, x2, y2 = p1.x, p1.y, p2.x, p2.y
-        
-        # see formula 14, http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
-        d = abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / hypot(x2 - x1, y2 - y1)
+        try:
+            x = (cos2*sin1*x1 - cos2*cos1*y1 - cos1*sin2*x2 + cos1*cos2*y2) / (cos2*sin1 - cos1*sin2)
+            y = (sin2*x - sin2*x2 + cos2*y2) / cos2
+            
+            p1, p2 = ray1.p_tail.p_edge.p1, ray1.p_tail.p_edge.p2
+            x1, y1, x2, y2 = p1.x, p1.y, p2.x, p2.y
+            
+            # see formula 14, http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
+            d = abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / hypot(x2 - x1, y2 - y1)
+
+        except ZeroDivisionError:
+            # unsolved intersection
+            return 6378137, None
     
+        if not _Point(x, y).within(ray1.p_tail.p_edge.poly):
+            # collision outside the original polygon
+            return 6378137, None
+        
         return d, Point(x, y)
 
 def polygon_edges(poly):
-    """
+    """ Build a list of edges from the exterior ring of a polygon.
+    
+        Enforces the simplicity and validity of the polygon,
+        also ensures that edges are ordered clockwise.
     """
     assert poly.__class__ is Polygon, 'Polygon, not MultiPolygon'
     assert len(poly.interiors) == 0, 'No donut holes, either'
+    assert poly.is_valid, 'Seriously amirite?'
     
     points, edges = [], []
     
@@ -230,13 +261,32 @@ def polygon_edges(poly):
     for (i, p1) in enumerate(points):
         j = (i + 1) % len(points)
         p2 = points[j]
-        edge = Edge(p1, p2)
+        edge = Edge(p1, p2, poly)
         edges.append(edge)
+    
+    spin = 0
+    
+    for (i, edge1) in enumerate(edges):
+        j = (i + 1) % len(edges)
+        edge2 = edges[j]
+        
+        theta = edge2.theta - edge1.theta
+        
+        if theta > pi:
+            theta -= pi * 2
+        elif theta < -pi:
+            theta += pi * 2
+        
+        spin += theta
+    
+    if abs(spin + pi*2) < 0.000001:
+        # uh oh, counterclockwise polygon.
+        edges = [Edge(e.p2, e.p1, poly) for e in reversed(edges)]
     
     return edges
 
 def edge_rays(edges):
-    """
+    """ Build a list of rays pointing inward from junctions between edges.
     """
     stubs, rays = [], []
     
@@ -252,7 +302,7 @@ def edge_rays(edges):
     return rays
 
 def ray_collisions(rays):
-    """
+    """ Build a list of collisions between pairs of rays.
     """
     collisions = []
     
@@ -264,26 +314,15 @@ def ray_collisions(rays):
     
     return collisions
 
-calculated_intersections = {}
-
-def print_rays(rays):
-    """
-    """
-    for ray in rays:
-        print ray
-        print ' ', ray.start
-        
-        for tail in set((ray.p_tail, ray.n_tail)):
-            print ' ', tail
-            print '   ', tail.end
-
 if __name__ == '__main__':
     
+    poly = LineString(((50, 50), (200, 50), (250, 100), (250, 250), (50, 250))).buffer(30, 2)
     poly = Polygon(((150, 25), (250, 250), (50, 250)))
     poly = Polygon(((140, 25), (160, 25), (250, 100), (250, 250), (50, 250), (40, 240)))
     
-    poly = LineString(((50, 50), (200, 50), (250, 100), (250, 250), (50, 250))).buffer(30, 2)
-    poly = Polygon(list(reversed(poly.exterior.coords)))
+    poly1 = LineString(((50, 110), (220, 160))).buffer(40, 2)
+    poly2 = LineString(((80, 140), (250, 190))).buffer(40, 2)
+    poly = poly1.union(poly2)
     
     edges = polygon_edges(poly)
     rays = edge_rays(edges)
@@ -301,7 +340,6 @@ if __name__ == '__main__':
     
     img.save('skeleton-%03d.png' % frame)
 
-    #print_rays(rays)
     print frame, '-' * 40
     
     while len(collisions) > 1:
@@ -339,5 +377,4 @@ if __name__ == '__main__':
         
         img.save('skeleton-%03d.png' % frame)
     
-        #print_rays(rays)
         print frame, '-' * 40
