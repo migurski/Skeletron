@@ -4,7 +4,6 @@ from math import pi, sin, cos, atan2, hypot
 from PIL import Image
 from PIL.ImageDraw import ImageDraw
 from shapely.geometry import Polygon, LineString
-from sympy import Symbol, solve
 
 def draw_edge(edge, img):
     """
@@ -178,10 +177,17 @@ def edge_rays(edges):
 
     return rays
 
+calculated_intersections = {}
+
 def rays_intersection(ray1, ray2):
     """
     """
-    if ray1.p_tail.p_edge is ray2.n_tail.n_edge and ray2.p_tail.p_edge is ray1.n_tail.n_edge:
+    if (ray1, ray2) in calculated_intersections:
+        return calculated_intersections[(ray1, ray2)]
+    
+    is_closure = ray1.p_tail.p_edge is ray2.n_tail.n_edge and ray2.p_tail.p_edge is ray1.n_tail.n_edge
+    
+    if is_closure:
     
         tails1 = set((ray1.p_tail, ray1.n_tail))
         tails2 = set((ray2.p_tail, ray2.n_tail))
@@ -193,39 +199,32 @@ def rays_intersection(ray1, ray2):
     
         return 0, ray.start, ray1, ray2
     
-    x, y = Symbol('x'), Symbol('y')
-    
     x1, y1 = ray1.start.x, ray1.start.y
-    s1, c1 = sin(ray1.theta), cos(ray1.theta)
+    sin1, cos1 = sin(ray1.theta), cos(ray1.theta)
 
     x2, y2 = ray2.start.x, ray2.start.y
-    s2, c2 = sin(ray2.theta), cos(ray2.theta)
+    sin2, cos2 = sin(ray2.theta), cos(ray2.theta)
     
     # Based on parametric form, where:
-    #   x = x1 + c1 * t
-    #   y = y1 + s1 * t
-    #   x = x2 + c2 * t
-    #   y = y2 + s2 * t
+    #   x = x1 + cos1 * t
+    #   y = y1 + sin1 * t
+    #   x = x2 + cos2 * t
+    #   y = y2 + sin2 * t
     
-    a1 = s1
-    b1 = -c1
-    c1 = c1 * y1 - s1 * x1
+    x = (cos2*sin1*x1 - cos2*cos1*y1 - cos1*sin2*x2 + cos1*cos2*y2) / (cos2*sin1 - cos1*sin2)
+    y = (sin2*x - sin2*x2 + cos2*y2) / cos2
+    
+    p1, p2 = ray1.p_tail.p_edge.p1, ray1.p_tail.p_edge.p2
+    x1, y1, x2, y2 = p1.x, p1.y, p2.x, p2.y
+    
+    # see formula 14, http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
+    d = abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / hypot(x2 - x1, y2 - y1)
 
-    a2 = s2
-    b2 = -c2
-    c2 = c2 * y2 - s2 * x2
+    intersection = d, Point(x, y), ray1, ray2
     
-    solution = solve((a1 * x + b1 * y + c1, a2 * x + b2 * y + c2), x, y)
+    calculated_intersections[(ray1, ray2)] = intersection
     
-    if solution is None:
-        return 6378000, None, ray1, ray2
-    
-    x, y = solution[x], solution[y]
-    
-    d1 = hypot(x - x1, y - y1)
-    d2 = hypot(x - x2, y - y2)
-    
-    return min(d1, d2), Point(x, y), ray1, ray2
+    return intersection
 
 def print_rays(rays):
     """
@@ -270,21 +269,23 @@ if __name__ == '__main__':
     
     frame = 1
     
+    img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
+    
+    for edge in edges:
+        img = draw_edge(edge, img)
+
+    for ray in rays:
+        img = draw_ray(ray, img)
+    
+    img.save('skeleton-%03d.png' % frame)
+
+    #print_rays(rays)
+    print frame, '-' * 40
+    
     while len(rays) > 1:
+
+        frame += 1
     
-        img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
-        
-        for edge in edges:
-            img = draw_edge(edge, img)
-    
-        for ray in rays:
-            img = draw_ray(ray, img)
-        
-        img.save('skeleton-%03d.png' % frame)
-    
-        #print_rays(rays)
-        print frame, '-' * 40
-        
         intersections = [rays_intersection(ray1, ray2) for (ray1, ray2) in paired(rays)]
         intersections = sorted(intersections)
         distance, point, ray1, ray2 = intersections[0]
@@ -303,18 +304,17 @@ if __name__ == '__main__':
             else:
                 nu_rays.append(ray)
     
-        rays = nu_rays
-        frame += 1
-
-    img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
+        rays, old_rays = nu_rays, rays
     
-    for edge in edges:
-        img = draw_edge(edge, img)
-
-    for ray in rays:
-        img = draw_ray(ray, img)
+        img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
+        
+        for edge in edges:
+            img = draw_edge(edge, img)
     
-    img.save('skeleton-%03d.png' % frame)
-
-    #print_rays(rays)
-    print frame, '=' * 40
+        for ray in rays:
+            img = draw_ray(ray, img)
+        
+        img.save('skeleton-%03d.png' % frame)
+    
+        #print_rays(rays)
+        print frame, '-' * 40
