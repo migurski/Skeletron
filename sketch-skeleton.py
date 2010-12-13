@@ -1,5 +1,6 @@
 from sys import exit
 from math import pi, sin, cos, tan, atan2, hypot
+from operator import attrgetter
 
 from PIL import Image
 from PIL.ImageDraw import ImageDraw
@@ -172,12 +173,6 @@ class Collision:
     def __repr__(self):
         return 'Collision ' + ('%x' % id(self))[2:]
 
-    def __hash__(self):
-        return id(self)
-
-    def __cmp__(self, other):
-        return cmp(self.distance, other.distance)
-    
     def _intersection(self):
         """
         """
@@ -313,7 +308,7 @@ if __name__ == '__main__':
 
         frame += 1
         
-        collisions.sort()
+        collisions.sort(key=attrgetter('distance'))
         collision = collisions.pop(0)
         
         p_ray = collision.p_ray
