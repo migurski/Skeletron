@@ -87,7 +87,6 @@ class Tail:
         assert len(ends) == 1, 'All the adjoined tails must share a common end'
         
         self.start = tails[0].end
-        self.count = len(set(tails))
         self.length = max([tail.length for tail in tails])
         self.length += hypot(end.x - self.start.x, end.y - self.start.y)
 
@@ -99,9 +98,7 @@ class Tail:
     
     def _theta(self):
         thetas = [tail.theta for tail in self.tails]
-        print [tail.count for tail in self.tails]
-        weights = [tail.count for tail in self.tails]
-        return average_thetas(thetas, weights)
+        return average_thetas(thetas)
     
 class Stub:
     """
@@ -111,7 +108,6 @@ class Stub:
         self.p_edge = p_edge
         self.n_edge = n_edge
         self.length = 0
-        self.count = 1
         self.theta = self._theta()
         
         self.start = end
@@ -126,7 +122,7 @@ class Stub:
     def _theta(self):
         p_theta = self.p_edge.theta + pi/2
         n_theta = self.n_edge.theta + pi/2
-        return average_thetas((p_theta, n_theta), (1, 1))
+        return average_thetas((p_theta, n_theta))
 
 class Ray:
     """
@@ -143,8 +139,7 @@ class Ray:
     def _theta(self):
         tails = [self.p_tail, self.n_tail]
         thetas = [tail.theta for tail in tails]
-        weights = [1 for tail in tails]
-        return average_thetas(thetas, weights)
+        return average_thetas(thetas)
 
 def polygon_edges(poly):
     """
@@ -251,16 +246,12 @@ def paired(things):
         
         yield (thing1, thing2)
 
-def average_thetas(thetas, weights):
+def average_thetas(thetas):
     """
     """
     xs, ys = map(cos, thetas), map(sin, thetas)
-    total = float(sum(weights))
 
-    xs = [x * w/total for (x, w) in zip(xs, weights)]
-    ys = [y * w/total for (y, w) in zip(ys, weights)]
-
-    dx, dy = sum(xs), sum(ys)
+    dx, dy = sum(xs) / len(xs), sum(ys) / len(ys)
     
     theta = atan2(dy, dx)
     return theta
