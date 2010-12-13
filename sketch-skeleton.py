@@ -121,8 +121,15 @@ class Ray:
             # we have parallel edges
             return n_theta
 
-        thetas = n_theta, p_theta
-        return average_thetas(thetas) + pi/2
+        if n_theta < p_theta:
+            n_theta += pi * 2
+
+        rotation = n_theta - p_theta
+        
+        if rotation > pi:
+            rotation -= pi * 2
+        
+        return p_theta + rotation/2 + pi/2
 
 def polygon_edges(poly):
     """
@@ -229,23 +236,13 @@ def paired(things):
         
         yield (thing1, thing2)
 
-def average_thetas(thetas):
-    """
-    """
-    xs, ys = map(cos, thetas), map(sin, thetas)
-
-    dx, dy = sum(xs) / len(xs), sum(ys) / len(ys)
-    
-    theta = atan2(dy, dx)
-    return theta
-
 if __name__ == '__main__':
-    
-    poly = LineString(((50, 50), (200, 50), (250, 100), (250, 250), (50, 250))).buffer(30, 2)
-    poly = Polygon(list(reversed(poly.exterior.coords)))
     
     poly = Polygon(((150, 25), (250, 250), (50, 250)))
     poly = Polygon(((140, 25), (160, 25), (250, 100), (250, 250), (50, 250), (40, 240)))
+    
+    poly = LineString(((50, 50), (200, 50), (250, 100), (250, 250), (50, 250))).buffer(30, 2)
+    poly = Polygon(list(reversed(poly.exterior.coords)))
     
     edges = polygon_edges(poly)
     rays = edge_rays(edges)
