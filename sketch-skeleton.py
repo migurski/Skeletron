@@ -48,9 +48,11 @@ def draw_ray(ray, img, drawn):
     p1 = ray.start
     p2 = Point(p1.x + 10 * cos(ray.theta), p1.y + 10 * sin(ray.theta))
     
+    color = ray.reflex and (0x00, 0x00, 0x00) or (0xFF, 0x33, 0x00)
+    
     draw = ImageDraw(img)
-    draw.rectangle([(p1.x - 1, p1.y - 1), (p1.x + 1, p1.y + 1)], fill=(0xCC, 0x00, 0x00))
-    draw.line([(p1.x, p1.y), (p2.x, p2.y)], fill=(0xCC, 0x00, 0x00), width=1)
+    draw.rectangle([(p1.x - 1, p1.y - 1), (p1.x + 1, p1.y + 1)], fill=color)
+    draw.line([(p1.x, p1.y), (p2.x, p2.y)], fill=color, width=1)
     
     drawn.add(ray)
 
@@ -95,6 +97,9 @@ class Edge:
         self.poly = poly
         
         self.theta = atan2(p2.y - p1.y, p2.x - p1.x)
+
+    def __repr__(self):
+        return 'Edge ' + ('%x (%.1f, %.1f, %.1f, %.1f)' % (id(self), self.p1.x, self.p1.y, self.p2.x, self.p2.y))[2:]
 
 class Tail:
     """ A backwards-pointing length of traversed skeleton.
@@ -146,45 +151,51 @@ class Ray:
     """ A ray is a forward-pointing length of potential skeleton.
     
         Includes pointers to previous and next tails (p_tail, n_tail),
-        a starting point (start), and direction (theta).
+        a starting point (start), reflex flag and direction (theta).
     """
     def __init__(self, start, p_tail, n_tail):
         self.start = start
         self.p_tail = p_tail
         self.n_tail = n_tail
-        self.theta = self._theta()
-
+        self.theta, self.reflex = self._theta_reflex()
+        
     def __repr__(self):
         return 'Ray ' + ('%x' % id(self))[2:]
 
-    def _theta(self):
+    def _theta_reflex(self):
         n_theta = self.n_tail.n_edge.theta
         p_theta = self.p_tail.p_edge.theta
     
         if abs(tan(n_theta) - tan(p_theta)) < 0.000001:
             # we have parallel edges
-            return n_theta
+            return n_theta, False
 
         if n_theta < p_theta:
             n_theta += pi * 2
 
         rotation = n_theta - p_theta
+        reflex = False
         
         if rotation > pi:
-            rotation -= pi * 2
+            if self.p_tail.p_edge.p2 is self.n_tail.n_edge.p1:
+                reflex = True
+                rotation -= pi * 2
         
-        return p_theta + rotation/2 + pi/2
+        return p_theta + rotation/2 + pi/2, reflex
 
 class Collision:
     """ A collision is where two rays might potentially meet.
     
         Includes pointers to previous and next rays (p_ray, n_ray),
-        point of impact (point), and distance from one of the participating
-        edges to use for priority listing.
+        point of impact (point), active edge (edge), and distance from
+        one of the participating edges to use for priority listing.
     """
     def __init__(self, p_ray, n_ray):
         self.p_ray = p_ray
         self.n_ray = n_ray
+        
+        assert p_ray.n_tail.n_edge is n_ray.p_tail.p_edge
+        self.edge = p_ray.n_tail.n_edge
         
         self.distance, self.point = self._intersection()
 
@@ -210,27 +221,11 @@ class Collision:
         
             return 0, ray.start
         
-        x1, y1 = ray1.start.x, ray1.start.y
-        sin1, cos1 = sin(ray1.theta), cos(ray1.theta)
-    
-        x2, y2 = ray2.start.x, ray2.start.y
-        sin2, cos2 = sin(ray2.theta), cos(ray2.theta)
-        
-        # Based on parametric form, where:
-        #   x = x1 + cos1 * t
-        #   y = y1 + sin1 * t
-        #   x = x2 + cos2 * t
-        #   y = y2 + sin2 * t
-        
         try:
-            x = (cos2*sin1*x1 - cos2*cos1*y1 - cos1*sin2*x2 + cos1*cos2*y2) / (cos2*sin1 - cos1*sin2)
-            y = (sin2*x - sin2*x2 + cos2*y2) / cos2
-            
+            x, y = line_intersection(ray1.start, ray1.theta, ray2.start, ray2.theta)
+
             p1, p2 = ray1.p_tail.p_edge.p1, ray1.p_tail.p_edge.p2
-            x1, y1, x2, y2 = p1.x, p1.y, p2.x, p2.y
-            
-            # see formula 14, http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
-            d = abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / hypot(x2 - x1, y2 - y1)
+            d = point_line_distance(x, y, p1.x, p1.y, p2.x, p2.y)
 
         except ZeroDivisionError:
             # unsolved intersection
@@ -241,6 +236,36 @@ class Collision:
             return 6378137, None
         
         return d, Point(x, y)
+
+def line_intersection(point1, theta1, point2, theta2):
+    """ (x, y) intersection of line (point1, theta1) and (point2, theta2).
+        
+        Based on parametric form, where:
+        x = x1 + cos1 * t
+        y = y1 + sin1 * t
+        x = x2 + cos2 * t
+        y = y2 + sin2 * t
+    """
+    x1, y1 = point1.x, point1.y
+    x2, y2 = point2.x, point2.y
+    
+    sin1, cos1 = sin(theta1), cos(theta1)
+    sin2, cos2 = sin(theta2), cos(theta2)
+    
+    x = (cos2*sin1*x1 - cos2*cos1*y1 - cos1*sin2*x2 + cos1*cos2*y2) / (cos2*sin1 - cos1*sin2)
+    
+    if cos1 != 0:
+        y = (sin1*x - sin1*x1 + cos1*y1) / cos1
+    else:
+        y = (sin2*x - sin2*x2 + cos2*y2) / cos2
+    
+    return (x, y)
+
+def point_line_distance(x, y, x1, y1, x2, y2):
+    """ Distance of point (x, y) from line (x1, y1, x2, y2).
+    """
+    # see formula 14, http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
+    return abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / hypot(x2 - x1, y2 - y1)
 
 def polygon_edges(poly):
     """ Build a list of edges from the exterior ring of a polygon.
@@ -299,6 +324,8 @@ def edge_rays(edges):
         ray = Ray(stub.end, stub, stub)
         rays.append(ray)
 
+    edges = set()
+    
     return rays
 
 def ray_collisions(rays):
@@ -326,9 +353,30 @@ if __name__ == '__main__':
     poly2 = LineString(((80, 140), (250, 190))).buffer(40, 2)
     poly = poly1.union(poly2)
     
+    poly = Polygon(((75, 75), (225, 75), (225, 225), (140, 160), (75, 225)))
+
     edges = polygon_edges(poly)
     rays = edge_rays(edges)
     collisions = ray_collisions(rays)
+    
+    lines = []
+    
+    for ray in rays:
+        ray_edges = ray.p_tail.p_edge, ray.n_tail.n_edge
+    
+        if ray.reflex:
+            for collision in collisions:
+                if collision.edge not in ray_edges:
+                    try:
+                        print ray_edges[0].theta, collision.edge.theta
+                        xy = line_intersection(ray.start, ray_edges[0].theta, collision.edge.p1, collision.edge.theta)
+                    except ZeroDivisionError:
+                        xy = None
+                    else:
+                        lines.append((ray.start, Point(*xy)))
+                        lines.append((collision.edge.p1, Point(*xy)))
+                
+                    print ray_edges[0], 'through', collision.edge, xy
     
     print len(edges), 'edges,', len(rays), 'rays,', len(collisions), 'collisions.'
     
@@ -339,6 +387,11 @@ if __name__ == '__main__':
     
     for collision in collisions:
         draw_collision(collision, img, drawn)
+    
+    for (p1, p2) in lines:
+        draw = ImageDraw(img)
+        draw.line((p1.x, p1.y, p2.x, p2.y), fill=(0x66, 0x66, 0x66))
+        draw.rectangle([(p2.x - 2, p2.y - 2), (p2.x + 2, p2.y + 2)], fill=(0x66, 0x66, 0x66))
     
     img.save('skeleton-%03d.png' % frame)
 
