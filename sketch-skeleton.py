@@ -302,7 +302,7 @@ def edge_rays(edges):
     return rays
 
 def ray_collisions(rays):
-    """ Build a list of collisions between pairs of rays.
+    """ Build a sorted list of collisions between pairs of rays.
     """
     collisions = []
     
@@ -311,6 +311,8 @@ def ray_collisions(rays):
         ray2 = rays[j]
         collision = Collision(ray1, ray2)
         collisions.append(collision)
+    
+    collisions.sort(key=attrgetter('distance'))
     
     return collisions
 
@@ -346,7 +348,6 @@ if __name__ == '__main__':
 
         frame += 1
         
-        collisions.sort(key=attrgetter('distance'))
         collision = collisions.pop(0)
         
         p_ray = collision.p_ray
@@ -360,14 +361,24 @@ if __name__ == '__main__':
         for old_collision in collisions:
             if old_collision.n_ray is p_ray:
                 new_collision = Collision(old_collision.p_ray, new_ray)
+                
+                for (i, collision) in enumerate(collisions):
+                    if new_collision.distance < collision.distance:
+                        break
+
+                collisions.insert(i, new_collision)
                 collisions.remove(old_collision)
-                collisions.append(new_collision)
             
         for old_collision in collisions:
             if old_collision.p_ray is n_ray:
                 new_collision = Collision(new_ray, old_collision.n_ray)
+                
+                for (i, collision) in enumerate(collisions):
+                    if new_collision.distance < collision.distance:
+                        break
+
+                collisions.insert(i, new_collision)
                 collisions.remove(old_collision)
-                collisions.append(new_collision)
     
         img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
         drawn = set()
