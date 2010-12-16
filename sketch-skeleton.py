@@ -22,6 +22,7 @@ def draw_collision(collision, img, drawn):
     if collision in drawn:
         return
 
+    draw_edge(collision.edge, img, drawn)
     draw_ray(collision.p_ray, img, drawn)
     draw_ray(collision.n_ray, img, drawn)
     
@@ -62,8 +63,8 @@ def draw_tail(tail, img, drawn):
     if tail in drawn:
         return
     
-    for edge in (tail.p_edge, tail.n_edge):
-        draw_edge(edge, img, drawn)
+    #for edge in (tail.p_edge, tail.n_edge):
+    #    draw_edge(edge, img, drawn)
     
     for other in tail.tails:
         draw_tail(other, img, drawn)
@@ -212,7 +213,7 @@ class Ray:
         
         return p_theta + rotation/2 + pi/2, reflex
 
-class Collision:
+class CollisionEvent:
     """ A collision is where two rays might potentially meet.
     
         Includes pointers to previous and next rays (p_ray, n_ray),
@@ -229,7 +230,7 @@ class Collision:
         self.distance, self.point = self._intersection()
 
     def __repr__(self):
-        return 'Collision ' + ('%x' % id(self))[2:]
+        return 'Collision Event ' + ('%x' % id(self))[2:]
 
     def _intersection(self):
         """
@@ -265,6 +266,83 @@ class Collision:
             return 6378137, None
         
         return d, Point(x, y)
+
+class SplitEvent:
+    """ A split is where a ray and an edge split the underlying polygon.
+    
+        ...
+    """
+    def __init__(self, ray, edge):
+        self.ray = ray
+        self.edge = edge
+        
+        self.distance, self.point, self.is_valid = self._intersection()
+
+    def __repr__(self):
+        return 'Split Event ' + ('%x' % id(self))[2:]
+
+    def _intersection(self):
+        """
+        """
+        ray_edges = self.ray.p_tail.p_edge, self.ray.n_tail.n_edge
+        distances_points, invalid = [], (6378137, None, False)
+
+        if self.edge in ray_edges:
+            return invalid
+        
+        try:
+            # intersection with colliding edge
+            xy = line_intersection(self.ray.start, ray_edges[0].theta, self.edge.p1, self.edge.theta)
+            edge_xsect = Point(*xy)
+
+            # theta back to the start point
+            theta1 = atan2(self.ray.start.y - edge_xsect.y, self.ray.start.x - edge_xsect.x)
+
+            # theta to the intersection with colliding edge
+            x, y = line_intersection(self.ray.start, self.ray.theta, self.edge.p1, self.edge.theta)
+            theta2 = atan2(y - edge_xsect.y, x - edge_xsect.x)
+
+            # theta between the two
+            dx1, dy1 = cos(theta1), sin(theta1)
+            dx2, dy2 = cos(theta2), sin(theta2)
+            theta = atan2((dy1 + dy2) / 2, (dx1 + dx2) / 2)
+            
+            # point of potential split event
+            xy = line_intersection(self.ray.start, self.ray.theta, edge_xsect, theta)
+            split_point = Point(*xy)
+            
+            if not _Point(*xy).within(self.edge.poly):
+                # split point is outside the origin polygon
+                return invalid
+            
+            if split_point.left_of(self.edge.p1, self.edge.theta):
+                # split point is to the left of the collision edge
+                return invalid
+
+            if split_point.left_of(self.edge.p_ray.start, self.edge.p_ray.theta - pi):
+                # split point is to the left of the previous edge ray
+                return invalid
+
+            if split_point.left_of(self.edge.n_ray.start, self.edge.n_ray.theta):
+                # split point is to the left of the next edge ray
+                return invalid
+                
+        except ZeroDivisionError:
+            return invalid
+
+        else:
+            x, y = split_point.x, split_point.y
+            x1, y1 = self.edge.p1.x, self.edge.p1.y
+            x2, y2 = self.edge.p2.x, self.edge.p2.y
+        
+            d = point_line_distance(x, y, x1, y1, x2, y2)
+            
+            distances_points.append((d, split_point, True))
+        
+        if not distances_points:
+            return invalid
+        
+        return sorted(distances_points)[0]
 
 def line_intersection(point1, theta1, point2, theta2):
     """ (x, y) intersection of line (point1, theta1) and (point2, theta2).
@@ -365,7 +443,7 @@ def ray_collisions(rays):
     for (i, ray1) in enumerate(rays):
         j = (i + 1) % len(rays)
         ray2 = rays[j]
-        collision = Collision(ray1, ray2)
+        collision = CollisionEvent(ray1, ray2)
         collisions.append(collision)
     
     collisions.sort(key=attrgetter('distance'))
@@ -382,80 +460,19 @@ if __name__ == '__main__':
     poly2 = LineString(((80, 140), (250, 190))).buffer(40, 2)
     poly = poly1.union(poly2)
     
-    poly = Polygon(((75, 75), (225, 75), (225, 225), (140, 160), (75, 225)))
+    poly = Polygon(((75, 75), (225, 75), (225, 225), (140, 170), (75, 225)))
 
     edges = polygon_edges(poly)
     rays = edge_rays(edges)
     collisions = ray_collisions(rays)
     
-    points, lines = [], []
-    
     for ray in rays:
-        ray_edges = ray.p_tail.p_edge, ray.n_tail.n_edge
-        split_events = []
-    
         if ray.reflex:
             for collision in collisions:
-                if collision.edge not in ray_edges:
-                    try:
-                        # intersection with colliding edge
-                        xy = line_intersection(ray.start, ray_edges[0].theta, collision.edge.p1, collision.edge.theta)
-                        edge_xsect = Point(*xy)
-
-                        # theta back to the start point
-                        theta1 = atan2(ray.start.y - edge_xsect.y, ray.start.x - edge_xsect.x)
-    
-                        # theta to the intersection with colliding edge
-                        x, y = line_intersection(ray.start, ray.theta, collision.edge.p1, collision.edge.theta)
-                        theta2 = atan2(y - edge_xsect.y, x - edge_xsect.x)
-
-                        # theta between the two
-                        dx1, dy1 = cos(theta1), sin(theta1)
-                        dx2, dy2 = cos(theta2), sin(theta2)
-                        theta = atan2((dy1 + dy2) / 2, (dx1 + dx2) / 2)
-                        
-                        # point of potential split event
-                        xy = line_intersection(ray.start, ray.theta, edge_xsect, theta)
-                        split_point = Point(*xy)
-                        
-                        if not _Point(*xy).within(collision.edge.poly):
-                            # split point is outside the origin polygon
-                            continue
-                        
-                        if split_point.left_of(collision.edge.p1, collision.edge.theta):
-                            # split point is to the left of the collision edge
-                            continue
-
-                        if split_point.left_of(collision.edge.p_ray.start, collision.edge.p_ray.theta - pi):
-                            # split point is to the left of the previous edge ray
-                            continue
-
-                        if split_point.left_of(collision.edge.n_ray.start, collision.edge.n_ray.theta):
-                            # split point is to the left of the next edge ray
-                            continue
-                            
-                    except ZeroDivisionError:
-                        continue
-
-                    else:
-                        # point in the middle of the relevant edge
-                        p1, p2 = collision.edge.p1, collision.edge.p2
-                        target_point = Point((p1.x + p2.x) / 2., (p1.y + p2.y) / 2.)
-                        
-                        x, y = split_point.x, split_point.y
-                        x1, y1 = collision.edge.p1.x, collision.edge.p1.y
-                        x2, y2 = collision.edge.p2.x, collision.edge.p2.y
-                    
-                        d = point_line_distance(x, y, x1, y1, x2, y2)
-                        
-                        split_events.append((d, split_point, target_point))
-        
-        if not split_events:
-            continue
-
-        for (d, p1, p2) in split_events:
-            points.append(p1)
-            lines.append((p1, p2))
+                split = SplitEvent(ray, collision.edge)
+                
+                if split.is_valid:
+                    print split.distance, split.point
     
     print len(edges), 'edges,', len(rays), 'rays,', len(collisions), 'collisions.'
     
@@ -466,14 +483,6 @@ if __name__ == '__main__':
     
     for collision in collisions:
         draw_collision(collision, img, drawn)
-    
-    for p in points:
-        draw = ImageDraw(img)
-        draw.rectangle([(p.x - 2, p.y - 2), (p.x + 2, p.y + 2)], fill=(0x66, 0x66, 0x66))
-
-    for (p1, p2) in lines:
-        draw = ImageDraw(img)
-        draw.line([(p1.x, p1.y), (p2.x, p2.y)], fill=(0x66, 0x66, 0x66))
     
     img.save('skeleton-%03d.png' % frame)
 
@@ -495,7 +504,7 @@ if __name__ == '__main__':
         
         for old_collision in collisions:
             if old_collision.n_ray is p_ray:
-                new_collision = Collision(old_collision.p_ray, new_ray)
+                new_collision = CollisionEvent(old_collision.p_ray, new_ray)
                 
                 for (i, collision) in enumerate(collisions):
                     if new_collision.distance < collision.distance:
@@ -506,7 +515,7 @@ if __name__ == '__main__':
             
         for old_collision in collisions:
             if old_collision.p_ray is n_ray:
-                new_collision = Collision(new_ray, old_collision.n_ray)
+                new_collision = CollisionEvent(new_ray, old_collision.n_ray)
                 
                 for (i, collision) in enumerate(collisions):
                     if new_collision.distance < collision.distance:
