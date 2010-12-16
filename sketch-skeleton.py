@@ -359,7 +359,7 @@ if __name__ == '__main__':
     rays = edge_rays(edges)
     collisions = ray_collisions(rays)
     
-    lines = []
+    points, lines = [], []
     
     for ray in rays:
         ray_edges = ray.p_tail.p_edge, ray.n_tail.n_edge
@@ -368,15 +368,34 @@ if __name__ == '__main__':
             for collision in collisions:
                 if collision.edge not in ray_edges:
                     try:
-                        print ray_edges[0].theta, collision.edge.theta
+                        # intersection with colliding edge
                         xy = line_intersection(ray.start, ray_edges[0].theta, collision.edge.p1, collision.edge.theta)
+                        edge_xsect = Point(*xy)
+
                     except ZeroDivisionError:
-                        xy = None
-                    else:
-                        lines.append((ray.start, Point(*xy)))
-                        lines.append((collision.edge.p1, Point(*xy)))
-                
-                    print ray_edges[0], 'through', collision.edge, xy
+                        continue
+                    
+                    # theta back to the start point
+                    theta1 = atan2(ray.start.y - edge_xsect.y, ray.start.x - edge_xsect.x)
+                    
+                    try:
+                        # theta to the intersection with colliding edge
+                        x, y = line_intersection(ray.start, ray.theta, collision.edge.p1, collision.edge.theta)
+                        theta2 = atan2(y - edge_xsect.y, x - edge_xsect.x)
+
+                    except ZeroDivisionError:
+                        continue
+                        
+                    # theta between the two
+                    dx1, dy1 = cos(theta1), sin(theta1)
+                    dx2, dy2 = cos(theta2), sin(theta2)
+                    theta = atan2((dy1 + dy2) / 2, (dx1 + dx2) / 2)
+                    
+                    # point of potential split event
+                    xy = line_intersection(ray.start, ray.theta, edge_xsect, theta)
+                    points.append(Point(*xy))
+                    
+                    lines.append((edge_xsect, Point(*xy)))
     
     print len(edges), 'edges,', len(rays), 'rays,', len(collisions), 'collisions.'
     
@@ -388,10 +407,13 @@ if __name__ == '__main__':
     for collision in collisions:
         draw_collision(collision, img, drawn)
     
+    for p in points:
+        draw = ImageDraw(img)
+        draw.rectangle([(p.x - 2, p.y - 2), (p.x + 2, p.y + 2)], fill=(0x66, 0x66, 0x66))
+
     for (p1, p2) in lines:
         draw = ImageDraw(img)
-        draw.line((p1.x, p1.y, p2.x, p2.y), fill=(0x66, 0x66, 0x66))
-        draw.rectangle([(p2.x - 2, p2.y - 2), (p2.x + 2, p2.y + 2)], fill=(0x66, 0x66, 0x66))
+        draw.line([(p1.x, p1.y), (p2.x, p2.y)], fill=(0x66, 0x66, 0x66))
     
     img.save('skeleton-%03d.png' % frame)
 
