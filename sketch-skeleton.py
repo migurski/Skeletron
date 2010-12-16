@@ -363,6 +363,7 @@ if __name__ == '__main__':
     
     for ray in rays:
         ray_edges = ray.p_tail.p_edge, ray.n_tail.n_edge
+        split_events = []
     
         if ray.reflex:
             for collision in collisions:
@@ -372,30 +373,46 @@ if __name__ == '__main__':
                         xy = line_intersection(ray.start, ray_edges[0].theta, collision.edge.p1, collision.edge.theta)
                         edge_xsect = Point(*xy)
 
-                    except ZeroDivisionError:
-                        continue
-                    
-                    # theta back to the start point
-                    theta1 = atan2(ray.start.y - edge_xsect.y, ray.start.x - edge_xsect.x)
-                    
-                    try:
+                        # theta back to the start point
+                        theta1 = atan2(ray.start.y - edge_xsect.y, ray.start.x - edge_xsect.x)
+    
                         # theta to the intersection with colliding edge
                         x, y = line_intersection(ray.start, ray.theta, collision.edge.p1, collision.edge.theta)
                         theta2 = atan2(y - edge_xsect.y, x - edge_xsect.x)
 
+                        # theta between the two
+                        dx1, dy1 = cos(theta1), sin(theta1)
+                        dx2, dy2 = cos(theta2), sin(theta2)
+                        theta = atan2((dy1 + dy2) / 2, (dx1 + dx2) / 2)
+                        
+                        # point of potential split event
+                        xy = line_intersection(ray.start, ray.theta, edge_xsect, theta)
+                        split_point = Point(*xy)
+                        
+                        if not _Point(*xy).within(collision.edge.poly):
+                            continue
+                        
+                        # point where ray hits edge
+                        xy = line_intersection(ray.start, ray.theta, collision.edge.p1, collision.edge.theta)
+                        target_point = Point(*xy)
+                        
                     except ZeroDivisionError:
                         continue
+
+                    else:
+                        x, y = split_point.x, split_point.y
+                        x1, y1 = collision.edge.p1.x, collision.edge.p1.y
+                        x2, y2 = collision.edge.p2.x, collision.edge.p2.y
+                    
+                        d = point_line_distance(x, y, x1, y1, x2, y2)
                         
-                    # theta between the two
-                    dx1, dy1 = cos(theta1), sin(theta1)
-                    dx2, dy2 = cos(theta2), sin(theta2)
-                    theta = atan2((dy1 + dy2) / 2, (dx1 + dx2) / 2)
-                    
-                    # point of potential split event
-                    xy = line_intersection(ray.start, ray.theta, edge_xsect, theta)
-                    points.append(Point(*xy))
-                    
-                    lines.append((edge_xsect, Point(*xy)))
+                        split_events.append((d, split_point, target_point))
+        
+        if not split_events:
+            continue
+
+        points.append(sorted(split_events)[0][1])
+        lines.append(sorted(split_events)[0][1:])
     
     print len(edges), 'edges,', len(rays), 'rays,', len(collisions), 'collisions.'
     
