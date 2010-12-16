@@ -86,10 +86,34 @@ class Point:
     def __repr__(self):
         return 'Point ' + ('%x (%.1f, %.1f)' % (id(self), self.x, self.y))[2:]
 
+    def left_of(self, point, theta):
+        """ Return true if this point is to the left of a line.
+        
+            Line is defined as a point and direction.
+        """
+        # location of self relative to the (0, 0) of the given line.
+        dx, dy = self.x - point.x, self.y - point.y
+        
+        # y-position of self after rotation of the line back to theta 0.
+        # see http://en.wikipedia.org/wiki/Rotation_matrix
+        y = dx * sin(-theta) + dy * cos(-theta)
+        
+        # points to the left rotate to negative y.
+        # remember that in our internal coordinate space y points down as in PIL.
+        #
+        #            * left
+        #
+        # point ------------------> theta
+        #
+        #            right *
+        #
+        return y < 0
+
 class Edge:
     """ Edge between two points.
     
-        Includes points (p1, p2) and original containing polygon (poly).
+        Includes points (p1, p2), original containing polygon (poly), and
+        previous and next ray pointers (p_ray, n_ray) initialized to None.
     """
     def __init__(self, p1, p2, poly):
         self.p1 = p1
@@ -97,6 +121,8 @@ class Edge:
         self.poly = poly
         
         self.theta = atan2(p2.y - p1.y, p2.x - p1.x)
+        
+        self.p_ray, self.n_ray = None, None
 
     def __repr__(self):
         return 'Edge ' + ('%x (%.1f, %.1f, %.1f, %.1f)' % (id(self), self.p1.x, self.p1.y, self.p2.x, self.p2.y))[2:]
@@ -158,6 +184,9 @@ class Ray:
         self.p_tail = p_tail
         self.n_tail = n_tail
         self.theta, self.reflex = self._theta_reflex()
+        
+        self.p_tail.p_edge.n_ray = self
+        self.n_tail.n_edge.p_ray = self
         
     def __repr__(self):
         return 'Ray ' + ('%x' % id(self))[2:]
@@ -390,16 +419,29 @@ if __name__ == '__main__':
                         split_point = Point(*xy)
                         
                         if not _Point(*xy).within(collision.edge.poly):
+                            # split point is outside the origin polygon
                             continue
                         
-                        # point where ray hits edge
-                        xy = line_intersection(ray.start, ray.theta, collision.edge.p1, collision.edge.theta)
-                        target_point = Point(*xy)
-                        
+                        if split_point.left_of(collision.edge.p1, collision.edge.theta):
+                            # split point is to the left of the collision edge
+                            continue
+
+                        if split_point.left_of(collision.edge.p_ray.start, collision.edge.p_ray.theta - pi):
+                            # split point is to the left of the previous edge ray
+                            continue
+
+                        if split_point.left_of(collision.edge.n_ray.start, collision.edge.n_ray.theta):
+                            # split point is to the left of the next edge ray
+                            continue
+                            
                     except ZeroDivisionError:
                         continue
 
                     else:
+                        # point in the middle of the relevant edge
+                        p1, p2 = collision.edge.p1, collision.edge.p2
+                        target_point = Point((p1.x + p2.x) / 2., (p1.y + p2.y) / 2.)
+                        
                         x, y = split_point.x, split_point.y
                         x1, y1 = collision.edge.p1.x, collision.edge.p1.y
                         x2, y2 = collision.edge.p2.x, collision.edge.p2.y
@@ -411,8 +453,9 @@ if __name__ == '__main__':
         if not split_events:
             continue
 
-        points.append(sorted(split_events)[0][1])
-        lines.append(sorted(split_events)[0][1:])
+        for (d, p1, p2) in split_events:
+            points.append(p1)
+            lines.append((p1, p2))
     
     print len(edges), 'edges,', len(rays), 'rays,', len(collisions), 'collisions.'
     
