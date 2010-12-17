@@ -37,6 +37,31 @@ def draw_collision(collision, img, drawn):
     
     drawn.add(collision)
 
+def draw_split(split, img, drawn):
+    """ Draw a split and its ray to an image, if it hasn't been drawn already.
+    """
+    if split in drawn:
+        return
+    
+    draw_edge(split.edge, img, drawn)
+    draw_ray(split.ray, img, drawn)
+    
+    p = split.point
+    
+    draw = ImageDraw(img)
+    draw.rectangle([(p.x - 2, p.y - 2), (p.x + 2, p.y + 2)], fill=(0x66, 0x66, 0x66))
+    
+    drawn.add(split)
+
+def draw_event(event, img, drawn):
+    """
+    """
+    if event.__class__ is CollisionEvent:
+        return draw_collision(event, img, drawn)
+
+    elif event.__class__ is SplitEvent:
+        return draw_split(event, img, drawn)
+
 def draw_ray(ray, img, drawn):
     """ Draw a ray and its tails to an image, if it hasn't been drawn already.
     """
@@ -281,7 +306,7 @@ class CollisionEvent:
         return d, Point(x, y), False
 
 class SplitEvent:
-    """ A split is where a ray and an edge split the underlying polygon.
+    """ A split is where a ray and an edge potentially split the underlying polygon.
     
         ...
     """
@@ -454,10 +479,10 @@ def edge_rays(edges):
     
     return rays
 
-def ray_collisions(rays):
-    """ Build a sorted list of collisions between pairs of rays.
+def ray_events(rays):
+    """ Build a sorted list of events between pairs of rays.
     """
-    collisions = []
+    collisions, splits = [], []
     
     for (i, ray1) in enumerate(rays):
         j = (i + 1) % len(rays)
@@ -467,98 +492,108 @@ def ray_collisions(rays):
     
     for ray in rays:
         if ray.reflex:
+            ray_splits = []
+        
             for collision in collisions:
                 split = SplitEvent(ray, collision.edge)
                 
                 if split.is_valid:
-                    print split.distance, split.point
+                    ray_splits.append(split)
+            
+            if ray_splits:
+                ray_splits.sort(key=attrgetter('distance'))
+                splits.append(ray_splits[0])
     
-    collisions.sort(key=attrgetter('distance'))
+    events = sorted(collisions + splits, key=attrgetter('distance'))
     
-    return collisions
+    print [(e.distance, e) for e in events]
+    
+    return events
 
 if __name__ == '__main__':
     
     poly = LineString(((50, 50), (200, 50), (250, 100), (250, 250), (50, 250))).buffer(30, 2)
     poly = Polygon(((150, 25), (250, 250), (50, 250)))
-    poly = Polygon(((75, 75), (225, 75), (225, 225), (140, 170), (75, 225))) # reflex point
     
     poly1 = LineString(((50, 110), (220, 160))).buffer(40, 2)
     poly2 = LineString(((80, 140), (250, 190))).buffer(40, 2)
     poly = poly1.union(poly2)
     
-    poly = Polygon(((140, 25), (160, 25), (250, 100), (250, 250), (50, 250), (40, 240)))
+    poly = Polygon(((75, 75), (225, 75), (230, 220), (220, 230), (140, 170), (75, 225))) # reflex point
+    poly = Polygon(((140, 25), (160, 25), (250, 100), (250, 250), (50, 250), (40, 240))) # lumpy triangle
 
     edges = polygon_edges(poly)
     rays = edge_rays(edges)
-    collisions = ray_collisions(rays)
+    events = ray_events(rays)
     peaks = []
     
-    print len(edges), 'edges,', len(rays), 'rays,', len(collisions), 'collisions.'
+    print len(edges), 'edges,', len(rays), 'rays,', len(events), 'events.'
     
     frame = 1
     
     img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
     drawn = set()
     
-    for collision in collisions:
-        draw_collision(collision, img, drawn)
+    for event in events:
+        draw_event(event, img, drawn)
     
     img.save('skeleton-%03d.png' % frame)
 
     print frame, '-' * 40
     
-    while len(collisions):
+    while len(events):
     
         frame += 1
         
-        if collision.is_closure:
-            for c in collisions:
-                print c, '--', c.n_ray, c.p_ray
+        event = events.pop(0)
         
-        collision = collisions.pop(0)
+        if event.__class__ is SplitEvent:
+            print 'SPLIT'
         
-        if collision.is_closure and collision.n_ray is collision.p_ray:
-            tails = set([collision.n_ray.n_tail, collision.n_ray.p_tail])
-            peak = PeakEvent(*tails)
-            peaks.append(peak)
+        elif event.__class__ is CollisionEvent:
+            collision = event
         
-        else:
-            p_ray = collision.p_ray
-            n_ray = collision.n_ray
-            point = collision.point
+            if collision.is_closure and collision.n_ray is collision.p_ray:
+                tails = set([collision.n_ray.n_tail, collision.n_ray.p_tail])
+                peak = PeakEvent(*tails)
+                peaks.append(peak)
             
-            p_tail = Tail(point, p_ray.p_tail.p_edge, p_ray.n_tail.n_edge, p_ray.p_tail, p_ray.n_tail)
-            n_tail = Tail(point, n_ray.p_tail.p_edge, n_ray.n_tail.n_edge, n_ray.p_tail, n_ray.n_tail)
-            new_ray = Ray(point, p_tail, n_tail)
-            
-            for old_collision in collisions:
-                if old_collision.n_ray is p_ray:
-                    new_collision = CollisionEvent(old_collision.p_ray, new_ray)
-                    
-                    for (i, collision) in enumerate(collisions):
-                        if new_collision.distance < collision.distance:
-                            break
-    
-                    collisions.insert(i, new_collision)
-                    collisions.remove(old_collision)
+            else:
+                p_ray = collision.p_ray
+                n_ray = collision.n_ray
+                point = collision.point
                 
-            for old_collision in collisions:
-                if old_collision.p_ray is n_ray:
-                    new_collision = CollisionEvent(new_ray, old_collision.n_ray)
+                p_tail = Tail(point, p_ray.p_tail.p_edge, p_ray.n_tail.n_edge, p_ray.p_tail, p_ray.n_tail)
+                n_tail = Tail(point, n_ray.p_tail.p_edge, n_ray.n_tail.n_edge, n_ray.p_tail, n_ray.n_tail)
+                new_ray = Ray(point, p_tail, n_tail)
+                
+                for old_collision in events:
+                    if old_collision.n_ray is p_ray:
+                        new_collision = CollisionEvent(old_collision.p_ray, new_ray)
+                        
+                        for (i, collision) in enumerate(events):
+                            if new_collision.distance < collision.distance:
+                                break
+        
+                        events.insert(i, new_collision)
+                        events.remove(old_collision)
                     
-                    for (i, collision) in enumerate(collisions):
-                        if new_collision.distance < collision.distance:
-                            break
-    
-                    collisions.insert(i, new_collision)
-                    collisions.remove(old_collision)
+                for old_collision in events:
+                    if old_collision.p_ray is n_ray:
+                        new_collision = CollisionEvent(new_ray, old_collision.n_ray)
+                        
+                        for (i, collision) in enumerate(events):
+                            if new_collision.distance < collision.distance:
+                                break
+        
+                        events.insert(i, new_collision)
+                        events.remove(old_collision)
     
         img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
         drawn = set()
         
-        for collision in collisions:
-            draw_collision(collision, img, drawn)
+        for event in events:
+            draw_event(event, img, drawn)
         
         for peak in peaks:
             draw_peak(peak, img, drawn)
