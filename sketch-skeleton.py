@@ -57,6 +57,17 @@ def draw_ray(ray, img, drawn):
     
     drawn.add(ray)
 
+def draw_peak(peak, img, drawn):
+    """ Draw a peak's tails to an image, if it hasn't been drawn already.
+    """
+    if peak in drawn:
+        return
+    
+    for tail in peak.tails:
+        draw_tail(tail, img, drawn)
+    
+    drawn.add(peak)
+
 def draw_tail(tail, img, drawn):
     """ Draw a tail and its tree of edges to an image, if it hasn't been drawn already.
     """
@@ -217,8 +228,9 @@ class CollisionEvent:
     """ A collision is where two rays might potentially meet.
     
         Includes pointers to previous and next rays (p_ray, n_ray),
-        point of impact (point), active edge (edge), and distance from
-        one of the participating edges to use for priority listing.
+        point of impact (point), active edge (edge), distance from one
+        of the participating edges to use for priority listing, and
+        flag for whether this collision closes a peak (is_closure).
     """
     def __init__(self, p_ray, n_ray):
         self.p_ray = p_ray
@@ -227,7 +239,7 @@ class CollisionEvent:
         assert p_ray.n_tail.n_edge is n_ray.p_tail.p_edge
         self.edge = p_ray.n_tail.n_edge
         
-        self.distance, self.point = self._intersection()
+        self.distance, self.point, self.is_closure = self._intersection()
 
     def __repr__(self):
         return 'Collision Event ' + ('%x' % id(self))[2:]
@@ -240,7 +252,6 @@ class CollisionEvent:
         is_closure = ray1.p_tail.p_edge is ray2.n_tail.n_edge and ray2.p_tail.p_edge is ray1.n_tail.n_edge
         
         if is_closure:
-        
             tails1 = set((ray1.p_tail, ray1.n_tail))
             tails2 = set((ray2.p_tail, ray2.n_tail))
             
@@ -249,7 +260,9 @@ class CollisionEvent:
             else:
                 ray = ray1
         
-            return 0, ray.start
+            return 0, ray.start, True
+        
+        invalid = 6378137, None, False
         
         try:
             x, y = line_intersection(ray1.start, ray1.theta, ray2.start, ray2.theta)
@@ -259,13 +272,13 @@ class CollisionEvent:
 
         except ZeroDivisionError:
             # unsolved intersection
-            return 6378137, None
+            return invalid
     
         if not _Point(x, y).within(ray1.p_tail.p_edge.poly):
             # collision outside the original polygon
-            return 6378137, None
+            return invalid
         
-        return d, Point(x, y)
+        return d, Point(x, y), False
 
 class SplitEvent:
     """ A split is where a ray and an edge split the underlying polygon.
@@ -343,6 +356,12 @@ class SplitEvent:
             return invalid
         
         return sorted(distances_points)[0]
+
+class PeakEvent:
+    """
+    """
+    def __init__(self, *tails):
+        self.tails = tails
 
 def line_intersection(point1, theta1, point2, theta2):
     """ (x, y) intersection of line (point1, theta1) and (point2, theta2).
@@ -446,6 +465,14 @@ def ray_collisions(rays):
         collision = CollisionEvent(ray1, ray2)
         collisions.append(collision)
     
+    for ray in rays:
+        if ray.reflex:
+            for collision in collisions:
+                split = SplitEvent(ray, collision.edge)
+                
+                if split.is_valid:
+                    print split.distance, split.point
+    
     collisions.sort(key=attrgetter('distance'))
     
     return collisions
@@ -454,25 +481,18 @@ if __name__ == '__main__':
     
     poly = LineString(((50, 50), (200, 50), (250, 100), (250, 250), (50, 250))).buffer(30, 2)
     poly = Polygon(((150, 25), (250, 250), (50, 250)))
-    poly = Polygon(((140, 25), (160, 25), (250, 100), (250, 250), (50, 250), (40, 240)))
+    poly = Polygon(((75, 75), (225, 75), (225, 225), (140, 170), (75, 225))) # reflex point
     
     poly1 = LineString(((50, 110), (220, 160))).buffer(40, 2)
     poly2 = LineString(((80, 140), (250, 190))).buffer(40, 2)
     poly = poly1.union(poly2)
     
-    poly = Polygon(((75, 75), (225, 75), (225, 225), (140, 170), (75, 225)))
+    poly = Polygon(((140, 25), (160, 25), (250, 100), (250, 250), (50, 250), (40, 240)))
 
     edges = polygon_edges(poly)
     rays = edge_rays(edges)
     collisions = ray_collisions(rays)
-    
-    for ray in rays:
-        if ray.reflex:
-            for collision in collisions:
-                split = SplitEvent(ray, collision.edge)
-                
-                if split.is_valid:
-                    print split.distance, split.point
+    peaks = []
     
     print len(edges), 'edges,', len(rays), 'rays,', len(collisions), 'collisions.'
     
@@ -488,47 +508,60 @@ if __name__ == '__main__':
 
     print frame, '-' * 40
     
-    while len(collisions) > 1:
-
+    while len(collisions):
+    
         frame += 1
+        
+        if collision.is_closure:
+            for c in collisions:
+                print c, '--', c.n_ray, c.p_ray
         
         collision = collisions.pop(0)
         
-        p_ray = collision.p_ray
-        n_ray = collision.n_ray
-        point = collision.point
+        if collision.is_closure and collision.n_ray is collision.p_ray:
+            tails = set([collision.n_ray.n_tail, collision.n_ray.p_tail])
+            peak = PeakEvent(*tails)
+            peaks.append(peak)
         
-        p_tail = Tail(point, p_ray.p_tail.p_edge, p_ray.n_tail.n_edge, p_ray.p_tail, p_ray.n_tail)
-        n_tail = Tail(point, n_ray.p_tail.p_edge, n_ray.n_tail.n_edge, n_ray.p_tail, n_ray.n_tail)
-        new_ray = Ray(point, p_tail, n_tail)
-        
-        for old_collision in collisions:
-            if old_collision.n_ray is p_ray:
-                new_collision = CollisionEvent(old_collision.p_ray, new_ray)
-                
-                for (i, collision) in enumerate(collisions):
-                    if new_collision.distance < collision.distance:
-                        break
-
-                collisions.insert(i, new_collision)
-                collisions.remove(old_collision)
+        else:
+            p_ray = collision.p_ray
+            n_ray = collision.n_ray
+            point = collision.point
             
-        for old_collision in collisions:
-            if old_collision.p_ray is n_ray:
-                new_collision = CollisionEvent(new_ray, old_collision.n_ray)
+            p_tail = Tail(point, p_ray.p_tail.p_edge, p_ray.n_tail.n_edge, p_ray.p_tail, p_ray.n_tail)
+            n_tail = Tail(point, n_ray.p_tail.p_edge, n_ray.n_tail.n_edge, n_ray.p_tail, n_ray.n_tail)
+            new_ray = Ray(point, p_tail, n_tail)
+            
+            for old_collision in collisions:
+                if old_collision.n_ray is p_ray:
+                    new_collision = CollisionEvent(old_collision.p_ray, new_ray)
+                    
+                    for (i, collision) in enumerate(collisions):
+                        if new_collision.distance < collision.distance:
+                            break
+    
+                    collisions.insert(i, new_collision)
+                    collisions.remove(old_collision)
                 
-                for (i, collision) in enumerate(collisions):
-                    if new_collision.distance < collision.distance:
-                        break
-
-                collisions.insert(i, new_collision)
-                collisions.remove(old_collision)
+            for old_collision in collisions:
+                if old_collision.p_ray is n_ray:
+                    new_collision = CollisionEvent(new_ray, old_collision.n_ray)
+                    
+                    for (i, collision) in enumerate(collisions):
+                        if new_collision.distance < collision.distance:
+                            break
+    
+                    collisions.insert(i, new_collision)
+                    collisions.remove(old_collision)
     
         img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
         drawn = set()
         
         for collision in collisions:
             draw_collision(collision, img, drawn)
+        
+        for peak in peaks:
+            draw_peak(peak, img, drawn)
         
         img.save('skeleton-%03d.png' % frame)
     
