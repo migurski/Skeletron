@@ -4,6 +4,8 @@ from operator import attrgetter
 from PIL import Image
 from PIL.ImageDraw import ImageDraw
 from shapely.geometry import Polygon, LineString, Point as _Point
+from shapely.geometry.base import geom_factory
+from shapely.geos import lgeos
 
 def draw_edge(edge, img, drawn):
     """ Draw an edge to an image, if it hasn't been drawn already.
@@ -197,6 +199,20 @@ class Tail:
         boost = self.start.is_split and min_reach or 0
         
         return reach + boost
+    
+    def as_lines(self, min_reach):
+        """
+        """
+        if not self.reach(min_reach):
+            return []
+        
+        lines = [LineString(((self.start.x, self.start.y), (self.end.x, self.end.y)))]
+        
+        for tail in self.tails:
+            if tail.reach(min_reach) > min_reach:
+                lines += tail.as_lines(min_reach)
+        
+        return lines
 
 class Stub:
     """ A tail that has no preceding tails, used to start from the edges.
@@ -396,6 +412,17 @@ class PeakEvent:
         assert len(ends) == 1, 'All the adjoined tails must share a common end'
 
         self.tails = tails
+
+    def as_lines(self, min_reach):
+        """
+        """
+        lines = []
+        
+        for tail in self.tails:
+            if tail.reach(min_reach) > min_reach:
+                lines += tail.as_lines(min_reach)
+        
+        return lines
 
 def line_intersection(point1, theta1, point2, theta2):
     """ (x, y) intersection of line (point1, theta1) and (point2, theta2).
@@ -654,16 +681,29 @@ def get_peaks(poly):
 
     return peaks
 
-if __name__ == '__main__':
+def polygon_spine(poly, fringe):
+    """
+    """
+    lines = []
     
-    # y-intersection
-    poly1 = LineString(((50, 50), (150, 150), (250, 150))).buffer(40, 2)
-    poly2 = LineString(((60, 240), (150, 150))).buffer(50, 2)
-    poly = poly1.union(poly2)
+    for peak in get_peaks(poly):
+        lines += peak.as_lines(fringe)
+    
+    shape = reduce(lambda a, b: a.union(b), lines)
+    result = lgeos.GEOSLineMerge(shape._geom)
+    
+    return geom_factory(result)
+
+if __name__ == '__main__':
     
     # doubled-up lines
     poly1 = LineString(((50, 110), (220, 160))).buffer(40, 2)
     poly2 = LineString(((80, 140), (250, 190))).buffer(40, 2)
+    poly = poly1.union(poly2)
+    
+    # y-intersection
+    poly1 = LineString(((50, 50), (150, 150), (250, 150))).buffer(40, 2)
+    poly2 = LineString(((60, 240), (150, 150))).buffer(50, 2)
     poly = poly1.union(poly2)
     
     poly = Polygon(((150, 25), (250, 250), (50, 250))) # simple triangle
@@ -692,12 +732,19 @@ if __name__ == '__main__':
 
     print len(peaks), 'peaks.'
     
-    peaks = get_peaks(poly)
+    spine = polygon_spine(poly, 70)
 
     img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
-    drawn = set()
+    draw = ImageDraw(img)
     
-    for peak in peaks:
-        draw_peak(peak, img, drawn, 70)
+    polys = hasattr(poly, 'geoms') and poly.geoms or [poly]
+    
+    for poly in polys:
+        draw.polygon(list(poly.exterior.coords), outline=(0x99, 0x99, 0x99))
+
+    geoms = hasattr(spine, 'geoms') and spine.geoms or [spine]
+    
+    for geom in geoms:
+        draw.line(list(geom.coords), fill=(0x00, 0x00, 0x00))
     
     img.save('skeleton-final.png')
