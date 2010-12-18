@@ -526,8 +526,6 @@ def _ray_events(rays):
     
     events.sort(key=attrgetter('distance'))
     
-    print ', '.join(['%s at %.3f' % (e, e.distance) for e in events])
-    
     return events
 
 def polygon_events(poly):
@@ -627,6 +625,35 @@ def handle_collision(collision, events):
             insert_event(new_collision, events)
             events.remove(old_collision)
 
+def generate_states(poly):
+    """
+    """
+    events, peaks = polygon_events(poly), []
+    
+    yield events, peaks
+
+    while len(events):
+        event = events.pop(0)
+        
+        if event.__class__ is SplitEvent:
+            handle_split(event, events)
+        
+        elif event.__class__ is CollisionEvent:
+            peak = handle_collision(event, events)
+            
+            if peak:
+                peaks.append(peak)
+        
+        yield events, peaks
+
+def get_peaks(poly):
+    """
+    """
+    for (events, peaks) in generate_states(poly):
+        pass
+
+    return peaks
+
 if __name__ == '__main__':
     
     # y-intersection
@@ -643,38 +670,11 @@ if __name__ == '__main__':
     poly = Polygon(((140, 25), (160, 25), (250, 100), (250, 250), (50, 250), (40, 240))) # lumpy triangle
     poly = Polygon(((75, 75), (220, 70), (230, 80), (230, 220), (220, 230), (140, 170), (75, 225))) # reflex point
     poly = LineString(((50, 50), (200, 50), (250, 100), (250, 250), (50, 250))).buffer(30, 2) # c-curve street
-
-    events, peaks = polygon_events(poly), []
-    
-    print len(events), 'events.'
     
     frame = 1
     
-    img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
-    drawn = set()
+    for (events, peaks) in generate_states(poly):
     
-    for event in events:
-        draw_event(event, img, drawn, 70)
-    
-    img.save('skeleton-%03d.png' % frame)
-
-    print frame, '-' * 40
-    
-    while len(events):
-    
-        frame += 1
-        
-        event = events.pop(0)
-        
-        if event.__class__ is SplitEvent:
-            handle_split(event, events)
-        
-        elif event.__class__ is CollisionEvent:
-            peak = handle_collision(event, events)
-            
-            if peak:
-                peaks.append(peak)
-        
         img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
         drawn = set()
         
@@ -686,6 +686,18 @@ if __name__ == '__main__':
         
         img.save('skeleton-%03d.png' % frame)
     
-        print frame, '-' * 40
+        print frame
+        
+        frame += 1
 
     print len(peaks), 'peaks.'
+    
+    peaks = get_peaks(poly)
+
+    img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
+    drawn = set()
+    
+    for peak in peaks:
+        draw_peak(peak, img, drawn, 70)
+    
+    img.save('skeleton-final.png')
