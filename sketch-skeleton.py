@@ -185,13 +185,8 @@ class Tail:
         self.length += hypot(end.x - self.start.x, end.y - self.start.y)
 
     def __repr__(self):
-        return 'Tail ' + ('%x (%.1f, %s)' % (id(self), self.length, self.is_leaf()))[2:]
+        return 'Tail ' + ('%x (%.1f)' % (id(self), self.length))[2:]
 
-    def is_leaf(self):
-        """ True if the number of tails is zero or one.
-        """
-        return len(self.tails) <= 1
-    
 class Stub:
     """ A tail that has no preceding tails, used to start from the edges.
     """
@@ -206,9 +201,6 @@ class Stub:
 
     def __repr__(self):
         return 'Stub ' + ('%x' % id(self))[2:]
-
-    def is_leaf(self):
-        return True
 
 class Ray:
     """ A ray is a forward-pointing length of potential skeleton.
@@ -386,6 +378,9 @@ class PeakEvent:
     """
     """
     def __init__(self, *tails):
+        ends = set([tail.end for tail in tails])
+        assert len(ends) == 1, 'All the adjoined tails must share a common end'
+
         self.tails = tails
 
 def line_intersection(point1, theta1, point2, theta2):
@@ -405,7 +400,7 @@ def line_intersection(point1, theta1, point2, theta2):
     
     x = (cos2*sin1*x1 - cos2*cos1*y1 - cos1*sin2*x2 + cos1*cos2*y2) / (cos2*sin1 - cos1*sin2)
     
-    if cos1 != 0:
+    if abs(cos1) > 0.0000001:
         y = (sin1*x - sin1*x1 + cos1*y1) / cos1
     else:
         y = (sin2*x - sin2*x2 + cos2*y2) / cos2
