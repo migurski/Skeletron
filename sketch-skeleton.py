@@ -427,7 +427,7 @@ def point_line_distance(x, y, x1, y1, x2, y2):
     # see formula 14, http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
     return abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / hypot(x2 - x1, y2 - y1)
 
-def polygon_edges(poly):
+def _polygon_edges(poly):
     """ Build a list of edges from the exterior ring of a polygon.
     
         Enforces the simplicity and validity of the polygon,
@@ -470,7 +470,7 @@ def polygon_edges(poly):
     
     return edges
 
-def edge_rays(edges):
+def _edge_rays(edges):
     """ Build a list of rays pointing inward from junctions between edges.
     """
     stubs, rays = [], []
@@ -488,7 +488,7 @@ def edge_rays(edges):
     
     return rays
 
-def ray_events(rays):
+def _ray_events(rays):
     """ Build a sorted list of events between pairs of rays.
     """
     events = []
@@ -530,6 +530,13 @@ def ray_events(rays):
     
     return events
 
+def polygon_events(poly):
+    """ Build a sorted list of events for a polygon.
+    """
+    edges = _polygon_edges(poly)
+    rays = _edge_rays(edges)
+    return _ray_events(rays)
+
 def insert_event(new_event, events):
     """ Insert a new event into an ordered list of events in the right spot.
     """
@@ -538,6 +545,87 @@ def insert_event(new_event, events):
             break
 
     events.insert(index, new_event)
+
+def handle_split(split, events):
+    """
+    """
+    nu_tail = Tail(split.point, split.ray.p_tail.p_edge, split.ray.n_tail.n_edge, split.ray.p_tail, split.ray.n_tail)
+    nu_stub = Stub(split.point, split.edge, split.edge)
+    
+    nu_ray1 = Ray(split.point, nu_tail, nu_stub)
+    nu_ray2 = Ray(split.point, nu_stub, nu_tail)
+    
+    for old_collision in events[:]:
+        if old_collision.__class__ is not CollisionEvent:
+            continue
+        
+        if old_collision.n_ray is split.ray:
+            new_collision = CollisionEvent(old_collision.p_ray, nu_ray1)
+            insert_event(new_collision, events)
+            events.remove(old_collision)
+    
+    for old_collision in events[:]:
+        if old_collision.__class__ is not CollisionEvent:
+            continue
+        
+        if old_collision.p_ray is split.ray:
+            new_collision = CollisionEvent(nu_ray2, old_collision.n_ray)
+            insert_event(new_collision, events)
+            events.remove(old_collision)
+    
+    for old_collision in events[:]:
+        if old_collision.__class__ is not CollisionEvent:
+            continue
+        
+        if old_collision.edge is split.edge:
+            new_collision = CollisionEvent(nu_ray1, old_collision.n_ray)
+            insert_event(new_collision, events)
+
+            new_collision = CollisionEvent(old_collision.p_ray, nu_ray2)
+            insert_event(new_collision, events)
+
+            events.remove(old_collision)
+
+def handle_collision(collision, events):
+    """
+    """
+    if collision.is_closure and collision.n_ray is collision.p_ray:
+        tails = set([collision.n_ray.n_tail, collision.n_ray.p_tail])
+        peak = PeakEvent(*tails)
+        return peak
+    
+    p_ray = collision.p_ray
+    n_ray = collision.n_ray
+    point = collision.point
+    
+    p_tail = Tail(point, p_ray.p_tail.p_edge, p_ray.n_tail.n_edge, p_ray.p_tail, p_ray.n_tail)
+    n_tail = Tail(point, n_ray.p_tail.p_edge, n_ray.n_tail.n_edge, n_ray.p_tail, n_ray.n_tail)
+    new_ray = Ray(point, p_tail, n_tail)
+    
+    for old_split in events[:]:
+        if old_split.__class__ is not SplitEvent:
+            continue
+        
+        if old_split.ray in (p_ray, n_ray):
+            events.remove(old_split)
+    
+    for old_collision in events[:]:
+        if old_collision.__class__ is not CollisionEvent:
+            continue
+    
+        if old_collision.n_ray is p_ray:
+            new_collision = CollisionEvent(old_collision.p_ray, new_ray)
+            insert_event(new_collision, events)
+            events.remove(old_collision)
+        
+    for old_collision in events[:]:
+        if old_collision.__class__ is not CollisionEvent:
+            continue
+    
+        if old_collision.p_ray is n_ray:
+            new_collision = CollisionEvent(new_ray, old_collision.n_ray)
+            insert_event(new_collision, events)
+            events.remove(old_collision)
 
 if __name__ == '__main__':
     
@@ -556,12 +644,9 @@ if __name__ == '__main__':
     poly = Polygon(((75, 75), (220, 70), (230, 80), (230, 220), (220, 230), (140, 170), (75, 225))) # reflex point
     poly = LineString(((50, 50), (200, 50), (250, 100), (250, 250), (50, 250))).buffer(30, 2) # c-curve street
 
-    edges = polygon_edges(poly)
-    rays = edge_rays(edges)
-    events = ray_events(rays)
-    peaks = []
+    events, peaks = polygon_events(poly), []
     
-    print len(edges), 'edges,', len(rays), 'rays,', len(events), 'events.'
+    print len(events), 'events.'
     
     frame = 1
     
@@ -582,86 +667,13 @@ if __name__ == '__main__':
         event = events.pop(0)
         
         if event.__class__ is SplitEvent:
-            split = event
-            
-            nu_tail = Tail(split.point, split.ray.p_tail.p_edge, split.ray.n_tail.n_edge, split.ray.p_tail, split.ray.n_tail)
-            nu_stub = Stub(split.point, split.edge, split.edge)
-            
-            nu_ray1 = Ray(split.point, nu_tail, nu_stub)
-            nu_ray2 = Ray(split.point, nu_stub, nu_tail)
-            
-            for old_collision in events[:]:
-                if old_collision.__class__ is not CollisionEvent:
-                    continue
-                
-                if old_collision.n_ray is split.ray:
-                    new_collision = CollisionEvent(old_collision.p_ray, nu_ray1)
-                    insert_event(new_collision, events)
-                    events.remove(old_collision)
-            
-            for old_collision in events:
-                if old_collision.__class__ is not CollisionEvent:
-                    continue
-                
-                if old_collision.p_ray is split.ray:
-                    new_collision = CollisionEvent(nu_ray2, old_collision.n_ray)
-                    insert_event(new_collision, events)
-                    events.remove(old_collision)
-            
-            for old_collision in events[:]:
-                if old_collision.__class__ is not CollisionEvent:
-                    continue
-                
-                if old_collision.edge is split.edge:
-                    new_collision = CollisionEvent(nu_ray1, old_collision.n_ray)
-                    insert_event(new_collision, events)
-
-                    new_collision = CollisionEvent(old_collision.p_ray, nu_ray2)
-                    insert_event(new_collision, events)
-
-                    events.remove(old_collision)
+            handle_split(event, events)
         
         elif event.__class__ is CollisionEvent:
-            collision = event
-        
-            if collision.is_closure and collision.n_ray is collision.p_ray:
-                tails = set([collision.n_ray.n_tail, collision.n_ray.p_tail])
-                peak = PeakEvent(*tails)
-                peaks.append(peak)
+            peak = handle_collision(event, events)
             
-            else:
-                p_ray = collision.p_ray
-                n_ray = collision.n_ray
-                point = collision.point
-                
-                p_tail = Tail(point, p_ray.p_tail.p_edge, p_ray.n_tail.n_edge, p_ray.p_tail, p_ray.n_tail)
-                n_tail = Tail(point, n_ray.p_tail.p_edge, n_ray.n_tail.n_edge, n_ray.p_tail, n_ray.n_tail)
-                new_ray = Ray(point, p_tail, n_tail)
-                
-                for old_split in events[:]:
-                    if old_split.__class__ is not SplitEvent:
-                        continue
-                    
-                    if old_split.ray in (p_ray, n_ray):
-                        events.remove(old_split)
-                
-                for old_collision in events[:]:
-                    if old_collision.__class__ is not CollisionEvent:
-                        continue
-                
-                    if old_collision.n_ray is p_ray:
-                        new_collision = CollisionEvent(old_collision.p_ray, new_ray)
-                        insert_event(new_collision, events)
-                        events.remove(old_collision)
-                    
-                for old_collision in events[:]:
-                    if old_collision.__class__ is not CollisionEvent:
-                        continue
-                
-                    if old_collision.p_ray is n_ray:
-                        new_collision = CollisionEvent(new_ray, old_collision.n_ray)
-                        insert_event(new_collision, events)
-                        events.remove(old_collision)
+            if peak:
+                peaks.append(peak)
         
         img = Image.new('RGB', (300, 300), (0xFF, 0xFF, 0xFF))
         drawn = set()
