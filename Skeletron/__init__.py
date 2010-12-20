@@ -1,4 +1,5 @@
 from math import pi, sin, cos, tan, atan2, hypot
+from itertools import combinations
 from operator import attrgetter
 
 from shapely.geometry import Polygon, LineString, Point as _Point
@@ -342,7 +343,7 @@ def point_line_distance(x, y, x1, y1, x2, y2):
     # see formula 14, http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
     return abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / hypot(x2 - x1, y2 - y1)
 
-def _polygon_edges(poly):
+def _polygon_edges(poly, clockwise=True):
     """ Build a list of edges from the exterior ring of a polygon.
     
         Enforces the simplicity and validity of the polygon,
@@ -379,8 +380,11 @@ def _polygon_edges(poly):
         
         spin += theta
     
-    if abs(spin + pi*2) < 0.000001:
-        # uh oh, counterclockwise polygon.
+    want_direction = clockwise and 'cw' or 'ccw'
+    got_direction = (abs(spin + pi*2) < 0.000001) and 'ccw' or 'cc'
+    
+    if want_direction != got_direction:
+        # uh oh, opposite polygon.
         edges = [Edge(e.p2, e.p1, poly) for e in reversed(edges)]
     
     return edges
@@ -408,11 +412,13 @@ def _ray_events(rays):
     """
     events = []
     
-    for (i, ray1) in enumerate(rays):
-        j = (i + 1) % len(rays)
-        ray2 = rays[j]
-        collision = CollisionEvent(ray1, ray2)
-        events.append(collision)
+    for (ray1, ray2) in combinations(rays, 2):
+        if ray1.n_tail.n_edge is ray2.p_tail.p_edge:
+            collision = CollisionEvent(ray1, ray2)
+            events.append(collision)
+        elif ray2.n_tail.n_edge is ray1.p_tail.p_edge:
+            collision = CollisionEvent(ray2, ray1)
+            events.append(collision)
     
     events.sort(key=attrgetter('distance'))
     
@@ -446,8 +452,17 @@ def _ray_events(rays):
 def polygon_events(poly):
     """ Build a sorted list of events for a polygon.
     """
-    edges = _polygon_edges(poly)
-    rays = _edge_rays(edges)
+    assert poly.__class__ is Polygon, 'Polygon, not MultiPolygon'
+    assert poly.is_valid, 'Seriously amirite?'
+    
+    rays, rings = [], [poly.exterior] + list(poly.interiors)
+    
+    for (i, ring) in enumerate(rings):
+        clockwise = (i == 0)
+        edges = _polygon_edges(Polygon(list(ring.coords)), clockwise)
+        edges = [Edge(e.p1, e.p2, poly) for e in edges]
+        rays += _edge_rays(edges)
+    
     return _ray_events(rays)
 
 def insert_event(new_event, events):
