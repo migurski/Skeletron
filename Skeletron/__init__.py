@@ -40,7 +40,7 @@ class Point:
         #
         #            right *
         #
-        return y < 0
+        return y <= 0.0000001
 
 class Edge:
     """ Edge between two points.
@@ -187,7 +187,7 @@ class CollisionEvent:
         self.distance, self.point, self.is_closure = self._intersection()
 
     def __repr__(self):
-        return 'Collision Event ' + ('%x' % id(self))[2:]
+        return 'Collision Event ' + ('%x @%.2f' % (id(self), self.distance))[2:]
 
     def _intersection(self):
         """
@@ -237,7 +237,7 @@ class SplitEvent:
         self.distance, self.point, self.is_valid = self._intersection()
 
     def __repr__(self):
-        return 'Split Event ' + ('%x' % id(self))[2:]
+        return 'Split Event ' + ('%x @%.2f' % (id(self), self.distance))[2:]
 
     def _intersection(self):
         """
