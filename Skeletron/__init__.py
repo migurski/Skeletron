@@ -359,6 +359,23 @@ def _polygon_edges(poly, clockwise=True):
         p = Point(*poly.exterior.coords[i])
         points.append(p)
     
+    to_skip = set()
+    
+    for (i, p1) in enumerate(points):
+        j = (i + 1) % len(points)
+        k = (i + 2) % len(points)
+        p2, p3 = points[j], points[k]
+        
+        t1 = atan2(p2.y - p1.y, p2.x - p1.x)
+        t2 = atan2(p3.y - p2.y, p3.x - p2.x)
+        
+        if abs(t1 - t2) < 0.001:
+            # p2 seems to not have much of an angle to it - skip it
+            to_skip.add(p2)
+    
+    for skipped in to_skip:
+        points.remove(skipped)
+    
     for (i, p1) in enumerate(points):
         j = (i + 1) % len(points)
         p2 = points[j]
