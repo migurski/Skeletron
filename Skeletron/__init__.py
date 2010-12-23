@@ -158,6 +158,15 @@ class Ray:
                 reflex = True
                 rotation -= pi * 2
         
+        n_theta += pi/2
+        p_theta += pi/2
+        
+        nx, ny = cos(n_theta), sin(n_theta)
+        px, py = cos(p_theta), sin(p_theta)
+        
+        theta = atan2((ny + py) / 2, (nx + px) / 2)
+        return theta, reflex
+        
         return p_theta + rotation/2 + pi/2, reflex
 
 class CollisionEvent:
@@ -552,6 +561,9 @@ def handle_collision(collision, events):
             continue
         
         if old_split.ray in (p_ray, n_ray):
+            events.remove(old_split)
+        
+        elif old_split.edge in (p_ray.p_tail.p_edge, n_ray.n_tail.n_edge):
             events.remove(old_split)
     
     for old_collision in events[:]:
