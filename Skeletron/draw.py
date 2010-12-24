@@ -34,6 +34,13 @@ def draw_collision(collision, img, drawn, reach, xform):
     x, y = (xform is None) and (p.x, p.y) or xform(p.x, p.y)
     
     draw = ImageDraw(img)
+    
+    x0, y0 = (xform is None) and (collision.point.x, collision.point.y) or xform(collision.point.x, collision.point.y)
+    x1, y1 = (xform is None) and (collision.p_ray.start.x, collision.p_ray.start.y) or xform(collision.p_ray.start.x, collision.p_ray.start.y)
+    x2, y2 = (xform is None) and (collision.n_ray.start.x, collision.n_ray.start.y) or xform(collision.n_ray.start.x, collision.n_ray.start.y)
+    draw.line([(x0, y0), (x1, y1)], fill=(0xFF, 0x99, 0x00))
+    draw.line([(x0, y0), (x2, y2)], fill=(0xFF, 0x99, 0x00))
+    
     draw.line([(x - 2, y - 2), (x + 2, y + 2)], fill=(0x99, 0x99, 0x99), width=1)
     draw.line([(x - 2, y + 2), (x + 2, y - 2)], fill=(0x99, 0x99, 0x99), width=1)
     
@@ -51,9 +58,13 @@ def draw_split(split, img, drawn, reach, xform):
     p = split.point
 
     x, y = (xform is None) and (p.x, p.y) or xform(p.x, p.y)
+    x1, y1 = (xform is None) and (split.edge.p1.x, split.edge.p1.y) or xform(split.edge.p1.x, split.edge.p1.y)
+    x2, y2 = (xform is None) and (split.edge.p2.x, split.edge.p2.y) or xform(split.edge.p2.x, split.edge.p2.y)
+    x0, y0 = (x1 + x2) / 2, (y1 + y2) / 2
     
     draw = ImageDraw(img)
     draw.rectangle([(x - 2, y - 2), (x + 2, y + 2)], fill=(0x66, 0x66, 0x66))
+    draw.line([(x, y), (x0, y0)], fill=(0x66, 0x66, 0x66))
     
     drawn.add(split)
 
@@ -91,6 +102,14 @@ def draw_ray(ray, img, drawn, reach, xform):
     draw = ImageDraw(img)
     draw.rectangle([(x1 - 1, y1 - 1), (x1 + 1, y1 + 1)], fill=color)
     draw.line([(x1, y1), (x2, y2)], fill=color, width=2)
+    
+    x0, y0 = (xform is None) and (p1.x, p1.y) or xform(p1.x, p1.y)
+    x1, y1 = (xform is None) and (ray.p_tail.p_edge.p1.x, ray.p_tail.p_edge.p1.y) or xform(ray.p_tail.p_edge.p1.x, ray.p_tail.p_edge.p1.y)
+    x2, y2 = (xform is None) and (ray.p_tail.p_edge.p2.x, ray.p_tail.p_edge.p2.y) or xform(ray.p_tail.p_edge.p2.x, ray.p_tail.p_edge.p2.y)
+    x3, y3 = (xform is None) and (ray.n_tail.n_edge.p1.x, ray.n_tail.n_edge.p1.y) or xform(ray.n_tail.n_edge.p1.x, ray.n_tail.n_edge.p1.y)
+    x4, y4 = (xform is None) and (ray.n_tail.n_edge.p2.x, ray.n_tail.n_edge.p2.y) or xform(ray.n_tail.n_edge.p2.x, ray.n_tail.n_edge.p2.y)
+    draw.line([(x0, y0), ((x1 + x2) / 2, (y1 + y2) / 2)], fill=(0xEE, 0xEE, 0xEE))
+    draw.line([(x0, y0), ((x3 + x4) / 2, (y3 + y4) / 2)], fill=(0xEE, 0xEE, 0xEE))
     
     drawn.add(ray)
 

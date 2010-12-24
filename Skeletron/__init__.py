@@ -158,14 +158,14 @@ class Ray:
                 reflex = True
                 rotation -= pi * 2
         
-        n_theta += pi/2
-        p_theta += pi/2
-        
-        nx, ny = cos(n_theta), sin(n_theta)
-        px, py = cos(p_theta), sin(p_theta)
-        
-        theta = atan2((ny + py) / 2, (nx + px) / 2)
-        return theta, reflex
+        # n_theta += pi/2
+        # p_theta += pi/2
+        # 
+        # nx, ny = cos(n_theta), sin(n_theta)
+        # px, py = cos(p_theta), sin(p_theta)
+        # 
+        # theta = atan2((ny + py) / 2, (nx + px) / 2)
+        # return theta, reflex
         
         return p_theta + rotation/2 + pi/2, reflex
 
@@ -213,7 +213,12 @@ class CollisionEvent:
             x, y = line_intersection(ray1.start, ray1.theta, ray2.start, ray2.theta)
 
             p1, p2 = ray1.p_tail.p_edge.p1, ray1.p_tail.p_edge.p2
-            d = point_line_distance(x, y, p1.x, p1.y, p2.x, p2.y)
+            p3, p4 = ray2.n_tail.n_edge.p1, ray2.n_tail.n_edge.p2
+
+            d1 = point_line_distance(x, y, p1.x, p1.y, p2.x, p2.y)
+            d2 = point_line_distance(x, y, p3.x, p3.y, p4.x, p4.y)
+            
+            d = min(d1, d2)
 
         except ZeroDivisionError:
             # unsolved intersection
@@ -407,7 +412,7 @@ def _polygon_edges(poly, clockwise=True):
         spin += theta
     
     want_direction = clockwise and 'cw' or 'ccw'
-    got_direction = (abs(spin + pi*2) < 0.000001) and 'ccw' or 'cc'
+    got_direction = (abs(spin + pi*2) < 0.000001) and 'ccw' or 'cw'
     
     if want_direction != got_direction:
         # uh oh, opposite polygon.
@@ -429,8 +434,6 @@ def _edge_rays(edges):
         ray = Ray(stub.end, stub, stub)
         rays.append(ray)
 
-    edges = set()
-    
     return rays
 
 def _ray_events(rays):
@@ -495,7 +498,7 @@ def insert_event(new_event, events):
     """ Insert a new event into an ordered list of events in the right spot.
     """
     for (index, event) in enumerate(events):
-        if new_event.distance < event.distance:
+        if new_event.distance < (event.distance - 0.000001):
             break
 
     events.insert(index, new_event)
@@ -563,7 +566,7 @@ def handle_collision(collision, events):
         if old_split.ray in (p_ray, n_ray):
             events.remove(old_split)
         
-        elif old_split.edge in (p_ray.p_tail.p_edge, n_ray.n_tail.n_edge):
+        elif old_split.edge in (n_ray.p_tail.p_edge, p_ray.n_tail.n_edge):
             events.remove(old_split)
     
     for old_collision in events[:]:
