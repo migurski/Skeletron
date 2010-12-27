@@ -390,7 +390,7 @@ def _polygon_edges(poly, clockwise=True):
         t1 = atan2(p2.y - p1.y, p2.x - p1.x)
         t2 = atan2(p3.y - p2.y, p3.x - p2.x)
         
-        if abs(t1 - t2) < 0.001:
+        if abs(t1 - t2) < 0.01:
             # p2 seems to not have much of an angle to it - skip it
             to_skip.add(p2)
     
