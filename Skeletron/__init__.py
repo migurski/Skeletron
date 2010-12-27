@@ -6,6 +6,13 @@ from shapely.geometry import Polygon, LineString, Point as _Point
 from shapely.geometry.base import geom_factory
 from shapely.geos import lgeos
 
+precision = 4
+
+def _(value):
+    """ Round a floating point value to a known, lowish precision.
+    """
+    return round(value, precision)
+
 class Point:
     """ Simple (x, y) point.
     
@@ -40,7 +47,7 @@ class Point:
         #
         #            right *
         #
-        return y <= 0.0000001
+        return _(y) <= 0
 
 class Edge:
     """ Edge between two points.
@@ -143,7 +150,7 @@ class Ray:
         n_theta = self.n_tail.n_edge.theta
         p_theta = self.p_tail.p_edge.theta
     
-        if abs(tan(n_theta) - tan(p_theta)) < 0.000001:
+        if _(tan(n_theta) - tan(p_theta)) == 0:
             # we have parallel edges
             return n_theta, False
 
@@ -344,7 +351,7 @@ def line_intersection(point1, theta1, point2, theta2):
     
     x = (cos2*sin1*x1 - cos2*cos1*y1 - cos1*sin2*x2 + cos1*cos2*y2) / (cos2*sin1 - cos1*sin2)
     
-    if abs(cos1) > 0.0000001:
+    if _(cos1) != 0:
         y = (sin1*x - sin1*x1 + cos1*y1) / cos1
     else:
         y = (sin2*x - sin2*x2 + cos2*y2) / cos2
@@ -412,7 +419,7 @@ def _polygon_edges(poly, clockwise=True):
         spin += theta
     
     want_direction = clockwise and 'cw' or 'ccw'
-    got_direction = (abs(spin + pi*2) < 0.000001) and 'ccw' or 'cw'
+    got_direction = _(spin + pi*2) == 0 and 'ccw' or 'cw'
     
     if want_direction != got_direction:
         # uh oh, opposite polygon.
@@ -498,7 +505,7 @@ def insert_event(new_event, events):
     """ Insert a new event into an ordered list of events in the right spot.
     """
     for (index, event) in enumerate(events):
-        if new_event.distance < (event.distance - 0.000001):
+        if _(new_event.distance) < _(event.distance):
             break
 
     events.insert(index, new_event)
