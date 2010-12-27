@@ -63,8 +63,6 @@ if __name__ == '__main__':
     
     for (events, peaks) in generate_states(poly):
     
-        print ' '.join(['%.4f' % event.distance for event in events])
-    
         img = Image.new('RGB', (dim, dim), (0xFF, 0xFF, 0xFF))
         drawn = set()
         
@@ -73,6 +71,13 @@ if __name__ == '__main__':
         
         for peak in peaks:
             draw_peak(peak, img, drawn, 60, xform)
+
+        draw = ImageDraw(img)
+        for (i, event) in reversed(list(enumerate(events))):
+            if event.point:
+                x, y = xform(event.point.x, event.point.y)
+                draw.rectangle((x - 1, y, x + 7, y + 8), fill=(0xFF, 0xFF, 0xFF))
+                draw.text((x, y), str(i), fill=(0x00, 0x00, 0x00))
         
         img.save('skeleton-%03d.png' % frame)
         index.write('<p><img src="skeleton-%03d.png"> (%d)</p>' % (frame, frame))
