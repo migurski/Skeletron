@@ -85,8 +85,9 @@ template<class K>
 void print_skeleton_inner_bisectors( CGAL::Straight_skeleton_2<K> const& ss )
 {
   typedef CGAL::Straight_skeleton_2<K> Ss ;
-  
   typedef typename Ss::Halfedge_const_iterator Halfedge_const_iterator ;
+
+  std::cout.precision(9);
   for ( Halfedge_const_iterator i = ss.halfedges_begin(); i != ss.halfedges_end(); ++i )
   {
     print_point(i->opposite()->vertex()->point()) ;
