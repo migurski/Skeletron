@@ -1,0 +1,4 @@
+run:
+
+  python setup.py build
+  PYTHONPATH=`ls -d build/lib.*` python test.py
