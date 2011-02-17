@@ -1,7 +1,7 @@
 # totally swiped from http://www.python.org/doc/2.5.2/ext/building.html
 from distutils.core import setup, Extension
 
-skeletron = Extension('_skeletron', sources=['wrapper.cpp'], libraries=['CGAL', 'core++'])
+skeletron = Extension('_skeletron', sources=['skeletron.cpp'], libraries=['CGAL', 'core++'])
 
 setup(name = 'Skeletron',
       version = '0.9.0',
