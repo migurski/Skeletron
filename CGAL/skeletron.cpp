@@ -56,6 +56,7 @@ static PyObject *skeleton(PyObject *self, PyObject *args) {
 	} else {
 	    poly->add_hole(*ring);
 	}
+	delete ring;
 	Py_DECREF(coords);
     }
 
