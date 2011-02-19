@@ -1,8 +1,42 @@
 import _skeletron
+
 try:
+    # shapely.ops.linemerge was introduced in 1.2
     from shapely.ops import linemerge
 except ImportError:
-    linemerge = None
+    try:
+        # you can still get to the underlying GEOSLineMerge in 1.0
+        from shapely.geos import lgeos
+    except ImportError:
+        # throw an ImportError later on
+        linemerge = None
+    else:
+        #
+        # define our own, just like in
+        # https://github.com/sgillies/shapely/blob/rel-1.2.8/shapely/ops.py
+        #
+        from shapely.geometry.base import geom_factory
+        from shapely.geometry import asMultiLineString
+        
+        def linemerge(lines): 
+            """Merges all connected lines from a source
+            
+            The source may be a MultiLineString, a sequence of LineString objects,
+            or a sequence of objects than can be adapted to LineStrings.  Returns a
+            LineString or MultiLineString when lines are not contiguous. 
+            """ 
+            source = None 
+            if hasattr(lines, 'type') and lines.type == 'MultiLineString': 
+                source = lines 
+            elif hasattr(lines, '__iter__'): 
+                try: 
+                    source = asMultiLineString([ls.coords for ls in lines]) 
+                except AttributeError: 
+                    source = asMultiLineString(lines) 
+            if source is None: 
+                raise ValueError("Cannot linemerge %s" % lines)
+            result = lgeos.GEOSLineMerge(source._geom) 
+            return geom_factory(result)   
 
 class InteriorSkeleton(object):
     """
