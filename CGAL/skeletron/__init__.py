@@ -1,6 +1,7 @@
 import _skeletron
 
 from shapely.geometry import LineString
+from math import hypot, atan2, sin, cos
 
 try:
     # shapely.ops.linemerge was introduced in 1.2
@@ -67,42 +68,35 @@ def xray(polygon):
     # Fix coordinate winding.
     #
     for (i, coords) in enumerate(edges):
-        winding = coord_winding(coords)
+        winding = _coord_winding(coords)
         
         if i == 0 and winding != 'exterior' or i >= 1 and winding != 'interior':
             edges[i] = [coord for coord in reversed(coords)]
     
-    from pprint import pprint
-    pprint(edges)
-    
     for start, end, edge_type in _skeletron.skeleton(edges):
         if edge_type == INNER:
-            list_ = inner
+            inner.append(LineString((start, end)))
         elif edge_type == OUTER:
-            list_ = outer
+            outer.append(LineString((start, end)))
         elif edge_type == BORDER:
-            list_ = border
-        
-        list_.append(LineString((start, end)))
+            border.append(LineString((start, end)))
     
     return inner, outer, border
 
-def coord_winding(coords):
+def _turn((x1, y1), (x2, y2), (x3, y3), (x4, y4)):
+    theta = atan2(y2 - y1, x2 - x1)
+    c, s = cos(-theta), sin(-theta)
+    
+    x = c * (x4 - x3) - s * (y4 - y3)
+    y = s * (x4 - x3) + c * (y4 - y3)
+    
+    theta = atan2(y, x)
+    
+    return theta
+
+def _coord_winding(coords):
     """ Return 'interior' or 'exterior' depending on the winding of the coordinate list.
     """
-    from math import hypot, atan2, sin, cos
-    
-    def dot((x1, y1), (x2, y2), (x3, y3), (x4, y4)):
-        theta = atan2(y2 - y1, x2 - x1)
-        c, s = cos(-theta), sin(-theta)
-        
-        x = c * (x4 - x3) - s * (y4 - y3)
-        y = s * (x4 - x3) + c * (y4 - y3)
-        
-        theta = atan2(y, x)
-        
-        return theta
-    
     count = len(coords) - 1
     turns = 0
     
@@ -110,7 +104,7 @@ def coord_winding(coords):
         (x1, y1), (x2, y2) = coords[i], coords[(i + 1) % count]
         (x3, y3), (x4, y4) = coords[(i + 1) % count], coords[(i + 2) % count]
         
-        turns += dot((x1, y1), (x2, y2), (x3, y3), (x4, y4))
+        turns += _turn((x1, y1), (x2, y2), (x3, y3), (x4, y4))
     
     return (turns > 0) and 'exterior' or 'interior'
 
