@@ -1,45 +1,9 @@
-import _skeletron
-
-from shapely.geometry import LineString
 from math import hypot, atan2, sin, cos
+from itertools import combinations
+    
+from shapely.geometry import LineString
 
-try:
-    # shapely.ops.linemerge was introduced in 1.2
-    from shapely.ops import linemerge
-except ImportError:
-    try:
-        # you can still get to the underlying GEOSLineMerge in 1.0
-        from shapely.geos import lgeos
-    except ImportError:
-        # throw an ImportError later on
-        linemerge = None
-    else:
-        #
-        # define our own, just like in
-        # https://github.com/sgillies/shapely/blob/rel-1.2.8/shapely/ops.py
-        #
-        from shapely.geometry.base import geom_factory
-        from shapely.geometry import asMultiLineString
-        
-        def linemerge(lines): 
-            """Merges all connected lines from a source
-            
-            The source may be a MultiLineString, a sequence of LineString objects,
-            or a sequence of objects than can be adapted to LineStrings.  Returns a
-            LineString or MultiLineString when lines are not contiguous. 
-            """ 
-            source = None 
-            if hasattr(lines, 'type') and lines.type == 'MultiLineString': 
-                source = lines 
-            elif hasattr(lines, '__iter__'): 
-                try: 
-                    source = asMultiLineString([ls.coords for ls in lines]) 
-                except AttributeError: 
-                    source = asMultiLineString(lines) 
-            if source is None: 
-                raise ValueError("Cannot linemerge %s" % lines)
-            result = lgeos.GEOSLineMerge(source._geom) 
-            return geom_factory(result)   
+import _skeletron
 
 BORDER = 0
 OUTER = 1
@@ -48,7 +12,6 @@ INNER = 2
 def xray(polygon):
     """
     """
-
     if hasattr(polygon, "__geo_interface__"):
         geometry = polygon.__geo_interface__
         edges = list(geometry["coordinates"])
@@ -62,8 +25,6 @@ def xray(polygon):
     else:
         raise TypeError("Geometry must be iterable or provide a __geo_interface__ method")
 
-    inner, outer, border = [], [], []
-    
     #
     # Fix coordinate winding.
     #
@@ -73,7 +34,13 @@ def xray(polygon):
         if i == 0 and winding != 'exterior' or i >= 1 and winding != 'interior':
             edges[i] = [coord for coord in reversed(coords)]
     
-    for start, end, edge_type in _skeletron.skeleton(edges):
+    #
+    # Calculate the straight skeleton.
+    #
+    edges = _skeletron.skeleton(edges)
+    inner, outer, border = [], [], []
+    
+    for start, end, edge_type in edges:
         if edge_type == INNER:
             inner.append(LineString((start, end)))
         elif edge_type == OUTER:
@@ -81,14 +48,20 @@ def xray(polygon):
         elif edge_type == BORDER:
             border.append(LineString((start, end)))
     
+    #
+    # Postprocess and return.
+    #
+    inner = _merge_lines(inner)
     return inner, outer, border
 
-def _turn((x1, y1), (x2, y2), (x3, y3), (x4, y4)):
+def _turn(x1, y1, x2, y2, x3, y3):
+    """ Calculate theta from segment (1-2) to segment (2-3), return radians.
+    """
     theta = atan2(y2 - y1, x2 - x1)
     c, s = cos(-theta), sin(-theta)
     
-    x = c * (x4 - x3) - s * (y4 - y3)
-    y = s * (x4 - x3) + c * (y4 - y3)
+    x = c * (x3 - x2) - s * (y3 - y2)
+    y = s * (x3 - x2) + c * (y3 - y2)
     
     theta = atan2(y, x)
     
@@ -101,12 +74,73 @@ def _coord_winding(coords):
     turns = 0
     
     for i in range(count):
-        (x1, y1), (x2, y2) = coords[i], coords[(i + 1) % count]
-        (x3, y3), (x4, y4) = coords[(i + 1) % count], coords[(i + 2) % count]
+        x1, y1 = coords[i]
+        x2, y2 = coords[(i + 1) % count]
+        x3, y3 = coords[(i + 2) % count]
         
-        turns += _turn((x1, y1), (x2, y2), (x3, y3), (x4, y4))
+        turns += _turn(x1, y1, x2, y2, x3, y3)
     
     return (turns > 0) and 'exterior' or 'interior'
+
+def _stitch_lines(line1, line2):
+    """ Stitch together two line strings if possible, return new line or false.
+    """
+    coords1 = list(line1.coords)
+    coords2 = list(line2.coords)
+    intersect = line1.intersection(line2)
+    
+    #
+    # Skeleton seems to often include numerous repeated lines.
+    #
+    if intersect.type == 'LineString' and intersect.length == line1.length:
+        return LineString(coords1[:])
+    
+    #
+    # Check whether the ends match, in any combination.
+    #
+    if coords1[0] == coords2[0]:
+        return LineString(list(reversed(coords1)) + coords2[1:])
+
+    elif coords1[0] == coords2[-1]:
+        return LineString(coords2 + coords1[1:])
+
+    elif coords1[-1] == coords2[0]:
+        return LineString(coords1 + coords2[1:])
+
+    elif coords1[-1] == coords2[-1]:
+        return LineString(coords1 + list(reversed(coords2))[1:])
+    
+    #
+    # Unstitchable.
+    #
+    return False
+
+def _merge_lines(lines):
+    """ Reduce a collection of lines to the minimum number of stitched lines.
+    """
+    lines = [line for line in lines if line.length]
+    merge = True
+    
+    while merge:
+        old_len = len(lines)
+        touched = set()
+        
+        for (line1, line2) in combinations(lines[:], 2):
+            if line1 in touched or line2 in touched:
+                continue
+            
+            merged = _stitch_lines(line1, line2)
+            
+            if merged:
+                lines.append(merged)
+                lines.remove(line1)
+                lines.remove(line2)
+                touched.add(line1)
+                touched.add(line2)
+        
+        merge = len(lines) < old_len
+    
+    return lines
 
 class InteriorSkeleton(object):
     """
