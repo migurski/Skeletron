@@ -1,5 +1,7 @@
 import _skeletron
 
+from shapely.geometry import LineString
+
 try:
     # shapely.ops.linemerge was introduced in 1.2
     from shapely.ops import linemerge
@@ -37,6 +39,41 @@ except ImportError:
                 raise ValueError("Cannot linemerge %s" % lines)
             result = lgeos.GEOSLineMerge(source._geom) 
             return geom_factory(result)   
+
+BORDER = 0
+OUTER = 1
+INNER = 2
+
+def xray(polygon):
+    """
+    """
+
+    if hasattr(polygon, "__geo_interface__"):
+        geometry = polygon.__geo_interface__
+        edges = geometry["coordinates"]
+
+        if geometry["type"] != "Polygon":
+            raise TypeError('Geometry object must be of polygon type, not "%s"' % geometry["type"])
+
+    elif hasattr(polygon, "__iter__"):
+        edges = polygon
+
+    else:
+        raise TypeError("Geometry must be iterable or provide a __geo_interface__ method")
+
+    inner, outer, border = [], [], []
+
+    for start, end, edge_type in _skeletron.skeleton(edges):
+        if edge_type == INNER:
+            list = inner
+        elif edge_type == OUTER:
+            list = outer
+        elif edge_type == BORDER:
+            list = border
+        
+        list.append(LineString((start, end)))
+    
+    return inner, outer, border
 
 class InteriorSkeleton(object):
     """
