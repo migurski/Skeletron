@@ -70,7 +70,10 @@ def xray(polygon):
         winding = coord_winding(coords)
         
         if i == 0 and winding != 'exterior' or i >= 1 and winding != 'interior':
-            edges[i] = reversed(coords)
+            edges[i] = [coord for coord in reversed(coords)]
+    
+    from pprint import pprint
+    pprint(edges)
     
     for start, end, edge_type in _skeletron.skeleton(edges):
         if edge_type == INNER:
