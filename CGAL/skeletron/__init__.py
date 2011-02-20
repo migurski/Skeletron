@@ -50,30 +50,66 @@ def xray(polygon):
 
     if hasattr(polygon, "__geo_interface__"):
         geometry = polygon.__geo_interface__
-        edges = geometry["coordinates"]
+        edges = list(geometry["coordinates"])
 
         if geometry["type"] != "Polygon":
             raise TypeError('Geometry object must be of polygon type, not "%s"' % geometry["type"])
 
     elif hasattr(polygon, "__iter__"):
-        edges = polygon
+        edges = list(polygon)
 
     else:
         raise TypeError("Geometry must be iterable or provide a __geo_interface__ method")
 
     inner, outer, border = [], [], []
-
+    
+    #
+    # Fix coordinate winding.
+    #
+    for (i, coords) in enumerate(edges):
+        winding = coord_winding(coords)
+        
+        if i == 0 and winding != 'exterior' or i >= 1 and winding != 'interior':
+            edges[i] = reversed(coords)
+    
     for start, end, edge_type in _skeletron.skeleton(edges):
         if edge_type == INNER:
-            list = inner
+            list_ = inner
         elif edge_type == OUTER:
-            list = outer
+            list_ = outer
         elif edge_type == BORDER:
-            list = border
+            list_ = border
         
-        list.append(LineString((start, end)))
+        list_.append(LineString((start, end)))
     
     return inner, outer, border
+
+def coord_winding(coords):
+    """ Return 'interior' or 'exterior' depending on the winding of the coordinate list.
+    """
+    from math import hypot, atan2, sin, cos
+    
+    def dot((x1, y1), (x2, y2), (x3, y3), (x4, y4)):
+        theta = atan2(y2 - y1, x2 - x1)
+        c, s = cos(-theta), sin(-theta)
+        
+        x = c * (x4 - x3) - s * (y4 - y3)
+        y = s * (x4 - x3) + c * (y4 - y3)
+        
+        theta = atan2(y, x)
+        
+        return theta
+    
+    count = len(coords) - 1
+    turns = 0
+    
+    for i in range(count):
+        (x1, y1), (x2, y2) = coords[i], coords[(i + 1) % count]
+        (x3, y3), (x4, y4) = coords[(i + 1) % count], coords[(i + 2) % count]
+        
+        turns += dot((x1, y1), (x2, y2), (x3, y3), (x4, y4))
+    
+    return (turns > 0) and 'exterior' or 'interior'
 
 class InteriorSkeleton(object):
     """
