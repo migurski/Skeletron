@@ -2,6 +2,7 @@ from math import pi
 from time import sleep
 from subprocess import Popen, PIPE
 
+from networkx import Graph
 from shapely.wkt import loads
 from shapely.geometry import Point, LineString
 from cairo import Context, ImageSurface, FORMAT_RGB24
@@ -61,44 +62,44 @@ qhull.stdin.close()
 sleep(1) # qhull.wait()
 qhull = qhull.stdout.read().splitlines()
 
-verts, polys = [int(n) for n in qhull[1].split()[:2]]
+vert_count, poly_count = map(int, qhull[1].split()[:2])
 
-vertices, inside = [], set()
+skeleton = Graph()
 
-for (index, line) in enumerate(qhull[2:2+verts]):
-    x, y = [float(n) for n in line.split()[:2]]
-    point = Point(x, y)
-    vertices.append(point)
-
-    ctx.arc(tx(x), ty(y), 2, 0, 2*pi)
-    
+for (index, line) in enumerate(qhull[2:2+vert_count]):
+    point = Point(*map(float, line.split()[:2]))
     if point.within(polygon):
+        skeleton.add_node(index, dict(point=point))
+
+for line in qhull[2 + vert_count:2 + vert_count + poly_count]:
+    indexes = map(int, line.split()[1:])
+    for (v, w) in zip(indexes, indexes[1:] + indexes[:1]):
+        if v not in skeleton.node or w not in skeleton.node:
+            continue
+        v1, v2 = skeleton.node[v]['point'], skeleton.node[w]['point']
+        line = LineString([(v1.x, v1.y), (v2.x, v2.y)])
+        if line.within(polygon):
+            skeleton.add_edge(v, w, dict(line=line))
+
+for index in skeleton.nodes():
+    point = skeleton.node[index]['point']
+
+    if skeleton.degree(index) == 1:
+        ctx.arc(tx(point.x), ty(point.y), 3, 0, 2*pi)
         ctx.set_source_rgb(.8, 0, 0)
-        inside.add(index)
     else:
-        ctx.set_source_rgb(.8, .8, .8)
+        ctx.arc(tx(point.x), ty(point.y), 2, 0, 2*pi)
+        ctx.set_source_rgb(.9, .9, .9)
 
     ctx.fill()
 
-for line in qhull[2+verts:2+verts+polys]:
-    vs = [int(n) for n in line.split()[1:]]
+for (v, w) in skeleton.edges():
+    (x1, y1), (x2, y2) = skeleton.edge[v][w]['line'].coords
     
-    for (v, w) in zip(vs, vs[1:] + vs[:1]):
-        if v not in inside or w not in inside:
-            continue
-        
-        x1, y1 = vertices[v].x, vertices[v].y
-        x2, y2 = vertices[w].x, vertices[w].y
-        
-        line = LineString([(x1, y1), (x2, y2)])
-        
-        if not line.within(polygon):
-            continue
-        
-        ctx.move_to(tx(x1), ty(y1))
-        ctx.line_to(tx(x2), ty(y2))
-        ctx.set_source_rgb(0, 0, 0)
-        ctx.set_line_width(1)
-        ctx.stroke()
+    ctx.move_to(tx(x1), ty(y1))
+    ctx.line_to(tx(x2), ty(y2))
+    ctx.set_source_rgb(0, 0, 0)
+    ctx.set_line_width(1)
+    ctx.stroke()
 
 img.write_to_png('look.png')
