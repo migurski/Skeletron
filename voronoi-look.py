@@ -54,6 +54,8 @@ for (x, y) in points:
     ctx.set_source_rgb(.6, .6, .6)
     ctx.fill()
 
+print 'qhull...'
+
 rbox = '\n'.join( ['2', str(len(points))] + ['%.2f %.2f' % (x, y) for (x, y) in points] + [''] )
 
 qhull = Popen('qvoronoi o'.split(), stdin=PIPE, stdout=PIPE)
@@ -63,6 +65,8 @@ sleep(1) # qhull.wait()
 qhull = qhull.stdout.read().splitlines()
 
 vert_count, poly_count = map(int, qhull[1].split()[:2])
+
+print 'graph...'
 
 skeleton = Graph()
 
@@ -81,17 +85,31 @@ for line in qhull[2 + vert_count:2 + vert_count + poly_count]:
         if line.within(polygon):
             skeleton.add_edge(v, w, dict(line=line))
 
+print 'trim...'
+
+removing = True
+
+while removing:
+    removing = False
+
+    for index in skeleton.nodes():
+        if skeleton.degree(index) == 1:
+            depth = skeleton.node[index].get('depth', 0)
+            if depth < 30:
+                other = skeleton.neighbors(index)[0]
+                skeleton.node[other]['depth'] = depth + skeleton.edge[index][other]['line'].length
+                skeleton.remove_node(index)
+                removing = True
+
+print 'draw...'
+
 for index in skeleton.nodes():
     point = skeleton.node[index]['point']
 
     if skeleton.degree(index) == 1:
         ctx.arc(tx(point.x), ty(point.y), 3, 0, 2*pi)
         ctx.set_source_rgb(.8, 0, 0)
-    else:
-        ctx.arc(tx(point.x), ty(point.y), 2, 0, 2*pi)
-        ctx.set_source_rgb(.9, .9, .9)
-
-    ctx.fill()
+        ctx.fill()
 
 for (v, w) in skeleton.edges():
     (x1, y1), (x2, y2) = skeleton.edge[v][w]['line'].coords
