@@ -3,7 +3,7 @@ from math import hypot, ceil
 
 from shapely.geometry import Polygon
 
-from Skeletron2 import ParserOSM, Canvas, buffer_graph, polygon_rings, skeleton_graph
+from Skeletron2 import ParserOSM, Canvas, buffer_graph, polygon_rings, skeleton_graph, simplify
 
 p = ParserOSM()
 g = p.parse(stdin.read())
@@ -50,50 +50,6 @@ for (v, w) in skeleton.edges():
 from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_path_length
 from networkx.exception import NetworkXNoPath
 from itertools import combinations
-
-def simplify(points, small_area=100):
-    """
-    """
-    if len(points) < 3:
-        return list(points)
-
-    while True:
-        
-        # For each coordinate that forms the apex of a two-segment
-        # triangle, find the area of that triangle and put it into a list
-        # along with the index, ordered from smallest to largest.
-    
-        popped, preserved = set(), set()
-        
-        triples = zip(points[:-2], points[1:-1], points[2:])
-        triangles = [Polygon((p1, p2, p3)) for (p1, p2, p3) in triples]
-        areas = [(triangle.area, index) for (index, triangle) in enumerate(triangles)]
-        
-        # Reduce any segments that makes a triangle whose area is below
-        # the minimum threshold, starting with the smallest and working up.
-        # Mark segments to be preserved until the next iteration.
-
-        for (area, index) in sorted(areas):
-            if area > small_area:
-                # nothing more can be removed on this iteration
-                break
-            
-            if (index + 1) in preserved:
-                # current index is too close to a previously-preserved one
-                continue
-            
-            preserved.add(index)
-            popped.add(index + 1)
-            preserved.add(index + 2)
-        
-        if not popped:
-            # nothing was removed so we are done
-            break
-        
-        # reduce the line, then try again
-        points = [point for (index, point) in enumerate(points) if index not in popped]
-    
-    return points
 
 for color in [(0, 0, 0), (.7, 0, 0), (1, .2, 0), (1, .6, 0), (1, 1, 0)]:
 
