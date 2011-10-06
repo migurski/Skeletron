@@ -111,15 +111,21 @@ class Canvas:
         xoff = left
         yoff = top
         
-        xscale = right - left
-        yscale = bottom - top
+        xscale = self.width / (right - left)
+        yscale = self.height / (bottom - top)
         
-        self.xform = lambda x, y: ((x - xoff) * (self.width / xscale), (y - yoff) * (self.height / yscale))
+        if abs(xscale) > abs(yscale):
+            xscale *= abs(yscale) / abs(xscale)
+        
+        elif abs(xscale) < abs(yscale):
+            yscale *= abs(xscale) / abs(yscale)
+
+        self.xform = lambda x, y: ((x - xoff) * xscale, (y - yoff) * yscale)
     
-    def dot(self, x, y, width=2, fill=(.5, .5, .5)):
+    def dot(self, x, y, size=2, fill=(.5, .5, .5)):
         x, y = self.xform(x, y)
 
-        self.ctx.arc(x, y, width, 0, 2*pi)
+        self.ctx.arc(x, y, size/2., 0, 2*pi)
         self.ctx.set_source_rgb(*fill)
         self.ctx.fill()
     
