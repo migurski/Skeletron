@@ -322,7 +322,7 @@ def polygon_skeleton(polygon):
     
     return skeleton
 
-def skeleton_routes(skeleton):
+def skeleton_routes(skeleton, min_length=25):
     """ Given a skeleton graph, return a series of (x, y) list routes.
     """
     # it's destructive
@@ -354,7 +354,11 @@ def skeleton_routes(skeleton):
         
         line = [_skeleton.node[index]['point'] for index in indexes]
         route = [(point.x, point.y) for point in line]
-        routes.append(route)
+        segments = [LineString([p1, p2]) for (p1, p2) in zip(route[:-1], route[1:])]
+        length = sum( [segment.length for segment in segments] )
+        
+        if length > min_length:
+            routes.append(route)
         
         if not _skeleton.edges():
             break
