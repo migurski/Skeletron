@@ -3,7 +3,7 @@ from math import hypot, ceil
 
 from shapely.geometry import Polygon
 
-from Skeletron2 import ParserOSM, Canvas, buffer_graph, polygon_rings, skeleton_graph, simplify
+from Skeletron2 import ParserOSM, Canvas, buffer_graph, polygon_rings, skeleton_graph, graph_routes, simplify
 
 p = ParserOSM()
 g = p.parse(stdin.read())
@@ -36,6 +36,7 @@ for ring in polygon_rings(poly):
     canvas.line(list(ring.coords), stroke=(.9, .9, .9))
 
 skeleton = skeleton_graph(poly)
+routes = graph_routes(skeleton)
 
 for index in skeleton.nodes():
     point = skeleton.node[index]['point']
@@ -45,39 +46,13 @@ for (v, w) in skeleton.edges():
     line = list(skeleton.edge[v][w]['line'].coords)
     canvas.line(line)
 
-# find paths
+colors = (0, 0, 0), (.7, 0, 0), (1, .2, 0), (1, .6, 0), (1, 1, 0)
 
-from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_path_length
-from networkx.exception import NetworkXNoPath
-from itertools import combinations
+for (route, color) in zip(routes, colors):
+    line = simplify(route)
 
-for color in [(0, 0, 0), (.7, 0, 0), (1, .2, 0), (1, .6, 0), (1, 1, 0)]:
-
-    leaves = [index for index in skeleton.nodes() if skeleton.degree(index) == 1]
-
-    paths = []
-
-    for (a, b) in combinations(leaves, 2):
-        try:
-            path = shortest_path_length(skeleton, a, b, 'length'), a, b
-        except NetworkXNoPath:
-            pass
-        else:
-            paths.append(path)
-
-    paths.sort(reverse=True)
-    indexes = shortest_path(skeleton, paths[0][1], paths[0][2], 'length')
-    line = [skeleton.node[index]['point'] for index in indexes]
-    line = simplify([(point.x, point.y) for point in line])
-    
     canvas.line(line, stroke=color, width=4)
     for (x, y) in line:
         canvas.dot(x, y, fill=color, size=8)
-    
-    for (v, w) in zip(indexes[:-1], indexes[1:]):
-        skeleton.remove_edge(v, w)
-    
-    if not skeleton.edges():
-        break
 
 canvas.save('look.png')

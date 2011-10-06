@@ -2,9 +2,12 @@ from time import sleep
 from math import hypot, ceil, pi
 from xml.parsers.expat import ParserCreate
 from subprocess import Popen, PIPE
-
+from itertools import combinations
+    
 from cairo import Context, ImageSurface, FORMAT_RGB24
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon
+from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_path_length
+from networkx.exception import NetworkXNoPath
 from networkx import Graph
 from pyproj import Proj
 
@@ -291,3 +294,39 @@ def skeleton_graph(polygon):
                     removing = True
     
     return skeleton
+
+def graph_routes(graph):
+    """
+    """
+    # it's destructive
+    graph = graph.copy()
+    
+    routes = []
+    
+    while True:
+        leaves = [index for index in graph.nodes() if graph.degree(index) == 1]
+    
+        paths = []
+    
+        for (v, w) in combinations(leaves, 2):
+            try:
+                path = shortest_path_length(graph, v, w, 'length'), v, w
+            except NetworkXNoPath:
+                pass
+            else:
+                paths.append(path)
+    
+        paths.sort(reverse=True)
+        indexes = shortest_path(graph, paths[0][1], paths[0][2], 'length')
+
+        for (v, w) in zip(indexes[:-1], indexes[1:]):
+            graph.remove_edge(v, w)
+        
+        line = [graph.node[index]['point'] for index in indexes]
+        route = [(point.x, point.y) for point in line]
+        routes.append(route)
+        
+        if not graph.edges():
+            break
+    
+    return routes
