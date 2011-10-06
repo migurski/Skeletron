@@ -13,7 +13,7 @@ from pyproj import Proj
 
 merc = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over')
 
-def way_key(tags):
+def name_highway_key(tags):
     if 'name' not in tags:
         return None
 
@@ -33,6 +33,7 @@ class ParserOSM:
     nodes = None
     ways = None
     way = None
+    key = None
 
     def __init__(self):
         self.p = ParserCreate()
@@ -40,9 +41,10 @@ class ParserOSM:
         self.p.EndElementHandler = self.end_element
         #self.p.CharacterDataHandler = char_data
     
-    def parse(self, input):
+    def parse(self, input, key_func=name_highway_key):
         self.nodes = dict()
         self.ways = dict()
+        self.key = key_func
         self.p.Parse(input)
         return self.graph_response()
     
@@ -100,7 +102,7 @@ class ParserOSM:
     
     def end_way(self):
         way = self.ways[self.way]
-        key = way_key(way['tags'])
+        key = self.key(way['tags'])
         
         if key:
             way['key'] = key
@@ -167,8 +169,8 @@ class Canvas:
     def save(self, filename):
         self.img.write_to_png(filename)
 
-def simplify(points, small_area=100):
-    """
+def simplify_line(points, small_area=100):
+    """ Simplify a line of points using V-W down to the given area.
     """
     if len(points) < 3:
         return list(points)
@@ -211,12 +213,12 @@ def simplify(points, small_area=100):
     
     return points
 
-def densify(ring, distance):
+def densify_line(points, distance):
+    """ Densify a line of points using the given distance.
     """
-    """
-    coords = [ring.coords[0]]
+    coords = [points[0]]
     
-    for curr_coord in list(ring.coords)[1:]:
+    for curr_coord in list(points)[1:]:
         prev_coord = coords[-1]
     
         dx, dy = curr_coord[0] - prev_coord[0], curr_coord[1] - prev_coord[1]
@@ -230,30 +232,34 @@ def densify(ring, distance):
     
     return coords
 
-def buffer_graph(graph):
-    lines = [(graph.node[a]['point'], graph.node[b]['point']) for (a, b) in graph.edges()]
+def network_polygon(network, buffer=20, density=5):
+    """ Given a street network graph, returns a buffered polygon.
+    """
+    lines = [(network.node[a]['point'], network.node[b]['point']) for (a, b) in network.edges()]
     lines = [((p1.x, p1.y), (p2.x, p2.y)) for (p1, p2) in lines]
     lines = MultiLineString(lines)
-    lines = lines.buffer(20, 3)
+    lines = lines.buffer(buffer, 3)
     
     if lines.type == 'MultiPolygon':
         geoms = []
         
-        for poly in lines.geoms:
+        for polygon in lines.geoms:
             geom = []
-            geom.append(densify(poly.exterior, 5))
-            geom.append([densify(ring, 5) for ring in poly.interiors])
+            geom.append(densify_line(polygon.exterior.coords, density))
+            geom.append([densify_line(ring.coords, density) for ring in polygon.interiors])
             geoms.append(geom)
         
-        poly = MultiPolygon(geoms)
+        polygon = MultiPolygon(geoms)
     else:
-        exterior = densify(lines.exterior, 5)
-        interiors = [densify(ring, 5) for ring in lines.interiors]
-        poly = Polygon(exterior, interiors)
+        exterior = densify_line(lines.exterior.coords, density)
+        interiors = [densify_line(ring.coords, density) for ring in lines.interiors]
+        polygon = Polygon(exterior, interiors)
     
-    return poly
+    return polygon
 
 def polygon_rings(polygon):
+    """ Given a buffer polygon, return a series of point rings.
+    """
     if polygon.type == 'Polygon':
         return [polygon.exterior] + list(polygon.interiors)
     
@@ -265,13 +271,13 @@ def polygon_rings(polygon):
     
     return rings
 
-def skeleton_graph(polygon):
+def polygon_skeleton(polygon):
+    """ Given a buffer polygon, return a skeleton graph.
+    """
     points = []
     
     for ring in polygon_rings(polygon):
         points.extend(list(ring.coords))
-    
-    print 'qhull...'
     
     rbox = '\n'.join( ['2', str(len(points))] + ['%.2f %.2f' % (x, y) for (x, y) in points] + [''] )
     
@@ -282,8 +288,6 @@ def skeleton_graph(polygon):
     qhull = qhull.stdout.read().splitlines()
     
     vert_count, poly_count = map(int, qhull[1].split()[:2])
-    
-    print 'graph...'
     
     skeleton = Graph()
     
@@ -302,8 +306,6 @@ def skeleton_graph(polygon):
             if line.within(polygon):
                 skeleton.add_edge(v, w, dict(line=line, length=line.length))
     
-    print 'trim...'
-    
     removing = True
     
     while removing:
@@ -320,22 +322,22 @@ def skeleton_graph(polygon):
     
     return skeleton
 
-def graph_routes(graph):
-    """
+def skeleton_routes(skeleton):
+    """ Given a skeleton graph, return a series of (x, y) list routes.
     """
     # it's destructive
-    graph = graph.copy()
+    _skeleton = skeleton.copy()
     
     routes = []
     
     while True:
-        leaves = [index for index in graph.nodes() if graph.degree(index) == 1]
+        leaves = [index for index in _skeleton.nodes() if _skeleton.degree(index) == 1]
     
         paths = []
     
         for (v, w) in combinations(leaves, 2):
             try:
-                path = shortest_path_length(graph, v, w, 'length'), v, w
+                path = shortest_path_length(_skeleton, v, w, 'length'), v, w
             except NetworkXNoPath:
                 pass
             else:
@@ -345,16 +347,16 @@ def graph_routes(graph):
             break
         
         paths.sort(reverse=True)
-        indexes = shortest_path(graph, paths[0][1], paths[0][2], 'length')
+        indexes = shortest_path(_skeleton, paths[0][1], paths[0][2], 'length')
 
         for (v, w) in zip(indexes[:-1], indexes[1:]):
-            graph.remove_edge(v, w)
+            _skeleton.remove_edge(v, w)
         
-        line = [graph.node[index]['point'] for index in indexes]
+        line = [_skeleton.node[index]['point'] for index in indexes]
         route = [(point.x, point.y) for point in line]
         routes.append(route)
         
-        if not graph.edges():
+        if not _skeleton.edges():
             break
     
     return routes
