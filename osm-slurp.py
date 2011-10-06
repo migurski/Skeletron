@@ -43,4 +43,35 @@ for (v, w) in skeleton.edges():
     line = list(skeleton.edge[v][w]['line'].coords)
     canvas.line(line)
 
+# find paths
+
+from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_path_length
+from networkx.exception import NetworkXNoPath
+from itertools import combinations
+
+for color in [(0, 0, 0), (.7, 0, 0), (1, .2, 0), (1, .6, 0), (1, 1, 0)]:
+
+    leaves = [index for index in skeleton.nodes() if skeleton.degree(index) == 1]
+
+    paths = []
+
+    for (a, b) in combinations(leaves, 2):
+        try:
+            path = shortest_path_length(skeleton, a, b, 'length'), a, b
+        except NetworkXNoPath:
+            pass
+        else:
+            paths.append(path)
+
+    paths.sort(reverse=True)
+    indexes = shortest_path(skeleton, paths[0][1], paths[0][2], 'length')
+    
+    for (v, w) in zip(indexes[:-1], indexes[1:]):
+        line = list(skeleton.edge[v][w]['line'].coords)
+        canvas.line(line, stroke=color, width=4)
+        skeleton.remove_edge(v, w)
+    
+    if not skeleton.edges():
+        break
+
 canvas.save('look.png')

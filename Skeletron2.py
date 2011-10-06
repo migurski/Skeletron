@@ -123,14 +123,14 @@ class Canvas:
         self.ctx.set_source_rgb(*fill)
         self.ctx.fill()
     
-    def line(self, points, stroke=(.5, .5, .5)):
+    def line(self, points, stroke=(.5, .5, .5), width=1):
         self.ctx.move_to(*self.xform(*points[0]))
         
         for (x, y) in points[1:]:
             self.ctx.line_to(*self.xform(x, y))
     
         self.ctx.set_source_rgb(*stroke)
-        self.ctx.set_line_width(1)
+        self.ctx.set_line_width(width)
         self.ctx.stroke()
     
     def save(self, filename):
@@ -159,7 +159,7 @@ def buffer_graph(graph):
     lines = [(graph.node[a]['point'], graph.node[b]['point']) for (a, b) in graph.edges()]
     lines = [((p1.x, p1.y), (p2.x, p2.y)) for (p1, p2) in lines]
     lines = MultiLineString(lines)
-    lines = lines.buffer(15, 3)
+    lines = lines.buffer(20, 3)
     
     if lines.type == 'MultiPolygon':
         raise Exception('not yet')
@@ -234,7 +234,7 @@ def skeleton_graph(polygon):
         for index in skeleton.nodes():
             if skeleton.degree(index) == 1:
                 depth = skeleton.node[index].get('depth', 0)
-                if depth < 10:
+                if depth < 20:
                     other = skeleton.neighbors(index)[0]
                     skeleton.node[other]['depth'] = depth + skeleton.edge[index][other]['line'].length
                     skeleton.remove_node(index)
