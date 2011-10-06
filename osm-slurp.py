@@ -25,18 +25,16 @@ xmin, ymin, xmax, ymax = min(xs), min(ys), max(xs), max(ys)
 canvas = Canvas(900, 600)
 canvas.fit(xmin - 50, ymax + 50, xmax + 50, ymin - 50)
 
-colors = (.7, .7, .7), (.8, .8, .8), (.85, .85, .85), (.9, .9, .9)
-
-for (route, color) in zip(routes, colors):
+for route in reversed(routes):
     line = simplify(route)
 
     canvas.line(line, stroke=(1, 1, 1), width=10)
     for (x, y) in line:
         canvas.dot(x, y, fill=(1, 1, 1), size=16)
 
-    canvas.line(line, stroke=color, width=6)
+    canvas.line(line, stroke=(1, .6, .4), width=6)
     for (x, y) in line:
-        canvas.dot(x, y, fill=color, size=12)
+        canvas.dot(x, y, fill=(1, .6, .4), size=12)
 
 #for (v, w) in skeleton.edges():
 #    line = list(skeleton.edge[v][w]['line'].coords)

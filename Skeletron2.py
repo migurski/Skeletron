@@ -4,7 +4,7 @@ from xml.parsers.expat import ParserCreate
 from subprocess import Popen, PIPE
 from itertools import combinations
     
-from cairo import Context, ImageSurface, FORMAT_RGB24
+from cairo import Context, ImageSurface, FORMAT_RGB24, LINE_CAP_ROUND
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon
 from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_path_length
 from networkx.exception import NetworkXNoPath
@@ -12,6 +12,21 @@ from networkx import Graph
 from pyproj import Proj
 
 merc = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over')
+
+def way_key(tags):
+    if 'name' not in tags:
+        return None
+
+    if 'highway' not in tags:
+        return None
+    
+    if not tags['name'] or not tags['highway']:
+        return None
+    
+    if tags['highway'] == 'motorway':
+        return None
+
+    return (tags['name'], tags['highway'])
 
 class ParserOSM:
 
@@ -35,7 +50,7 @@ class ParserOSM:
         graphs = dict()
         
         for (id, way) in self.ways.items():
-            key = tuple(way['key'])
+            key = way['key']
             node_ids = way['nodes']
             
             if key not in graphs:
@@ -73,21 +88,27 @@ class ParserOSM:
     
     def add_way(self, id):
         self.way = id
-        self.ways[id] = dict(nodes=[], key=[None, None])
+        self.ways[id] = dict(nodes=[], tags=dict(), key=None)
     
     def tag_way(self, key, value):
         way = self.ways[self.way]
-
-        if key == 'name':
-            way['key'][0] = value
-        elif key == 'highway':
-            way['key'][1] = value
+        way['tags'][key] = value
     
     def extend_way(self, id):
         way = self.ways[self.way]
         way['nodes'].append(id)
     
     def end_way(self):
+        way = self.ways[self.way]
+        key = way_key(way['tags'])
+        
+        if key:
+            way['key'] = key
+            del way['tags']
+
+        else:
+            del self.ways[self.way]
+        
         self.way = None
 
 class Canvas:
@@ -125,7 +146,7 @@ class Canvas:
 
         self.xform = lambda x, y: ((x - xoff) * xscale, (y - yoff) * yscale)
     
-    def dot(self, x, y, size=2, fill=(.5, .5, .5)):
+    def dot(self, x, y, size=4, fill=(.5, .5, .5)):
         x, y = self.xform(x, y)
 
         self.ctx.arc(x, y, size/2., 0, 2*pi)
@@ -137,8 +158,9 @@ class Canvas:
         
         for (x, y) in points[1:]:
             self.ctx.line_to(*self.xform(x, y))
-    
+        
         self.ctx.set_source_rgb(*stroke)
+        self.ctx.set_line_cap(LINE_CAP_ROUND)
         self.ctx.set_line_width(width)
         self.ctx.stroke()
     
@@ -215,12 +237,15 @@ def buffer_graph(graph):
     lines = lines.buffer(20, 3)
     
     if lines.type == 'MultiPolygon':
-        raise Exception('not yet')
         geoms = []
         
         for poly in lines.geoms:
             geom = []
             geom.append(densify(poly.exterior, 5))
+            geom.append([densify(ring, 5) for ring in poly.interiors])
+            geoms.append(geom)
+        
+        poly = MultiPolygon(geoms)
     else:
         exterior = densify(lines.exterior, 5)
         interiors = [densify(ring, 5) for ring in lines.interiors]
@@ -316,6 +341,9 @@ def graph_routes(graph):
             else:
                 paths.append(path)
     
+        if not paths:
+            break
+        
         paths.sort(reverse=True)
         indexes = shortest_path(graph, paths[0][1], paths[0][2], 'length')
 
