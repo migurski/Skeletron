@@ -284,7 +284,8 @@ def polygon_skeleton(polygon):
     qhull = Popen('qvoronoi o'.split(), stdin=PIPE, stdout=PIPE)
     qhull.stdin.write(rbox)
     qhull.stdin.close()
-    sleep(1) # qhull.wait()
+    sleep(.1) # this was once necessary, why?
+    qhull.wait()
     qhull = qhull.stdout.read().splitlines()
     
     vert_count, poly_count = map(int, qhull[1].split()[:2])
