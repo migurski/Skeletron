@@ -232,18 +232,24 @@ def densify_line(points, distance):
     
     return coords
 
-def network_polygon(network, buffer=20, density=5):
-    """ Given a street network graph, returns a buffered polygon.
+def network_multiline(network):
+    """ Given a street network graph, returns a multilinestring.
     """
-    lines = [(network.node[a]['point'], network.node[b]['point']) for (a, b) in network.edges()]
-    lines = [((p1.x, p1.y), (p2.x, p2.y)) for (p1, p2) in lines]
-    lines = MultiLineString(lines)
-    lines = lines.buffer(buffer, 3)
+    pairs = [(network.node[a]['point'], network.node[b]['point']) for (a, b) in network.edges()]
+    lines = [((p1.x, p1.y), (p2.x, p2.y)) for (p1, p2) in pairs]
+    multi = MultiLineString(lines)
     
-    if lines.type == 'MultiPolygon':
+    return multi
+
+def multiline_polygon(multiline, buffer=20, density=5):
+    """ Given a multilinestring, returns a buffered polygon.
+    """
+    prepolygon = multiline.buffer(buffer, 3)
+    
+    if prepolygon.type == 'MultiPolygon':
         geoms = []
         
-        for polygon in lines.geoms:
+        for polygon in prepolygon.geoms:
             geom = []
             geom.append(densify_line(polygon.exterior.coords, density))
             geom.append([densify_line(ring.coords, density) for ring in polygon.interiors])
@@ -251,8 +257,8 @@ def network_polygon(network, buffer=20, density=5):
         
         polygon = MultiPolygon(geoms)
     else:
-        exterior = densify_line(lines.exterior.coords, density)
-        interiors = [densify_line(ring.coords, density) for ring in lines.interiors]
+        exterior = densify_line(prepolygon.exterior.coords, density)
+        interiors = [densify_line(ring.coords, density) for ring in prepolygon.interiors]
         polygon = Polygon(exterior, interiors)
     
     return polygon

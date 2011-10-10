@@ -3,7 +3,7 @@ from math import hypot, ceil
 
 from shapely.geometry import Polygon
 
-from Skeletron2 import ParserOSM, Canvas, network_polygon, polygon_rings, polygon_skeleton, skeleton_routes, simplify_line
+from Skeletron2 import ParserOSM, Canvas, network_multiline, multiline_polygon, polygon_rings, polygon_skeleton, skeleton_routes, simplify_line
 
 p = ParserOSM()
 g = p.parse(stdin.read())
@@ -15,7 +15,8 @@ network = g[(u'Lakeside Drive', u'secondary')]
 if not network.edges():
     exit(1)
 
-poly = network_polygon(network)
+lines = network_multiline(network)
+poly = multiline_polygon(lines)
 skeleton = polygon_skeleton(poly)
 routes = skeleton_routes(skeleton)
 

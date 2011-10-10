@@ -4,7 +4,7 @@ from json import dump
 
 from shapely.geometry import Polygon, MultiLineString
 
-from Skeletron2 import ParserOSM, Canvas, network_polygon, polygon_rings, polygon_skeleton, skeleton_routes, simplify_line, merc
+from Skeletron2 import ParserOSM, Canvas, network_multiline, multiline_polygon, polygon_rings, polygon_skeleton, skeleton_routes, simplify_line, merc
 
 p = ParserOSM()
 g = p.parse(stdin.read())
@@ -18,7 +18,8 @@ for key in g:
     if not network.edges():
         continue
     
-    poly = network_polygon(network)
+    lines = network_multiline(network)
+    poly = multiline_polygon(lines)
     skeleton = polygon_skeleton(poly)
     routes = skeleton_routes(skeleton)
     
