@@ -3,8 +3,8 @@ from math import hypot, ceil
 
 from shapely.geometry import Polygon
 
-from Skeletron import network_multiline, multiline_polygon, polygon_rings, polygon_skeleton, skeleton_routes
-from Skeletron.util import simplify_line
+from Skeletron import network_multiline, multiline_centerline, multiline_polygon
+from Skeletron.util import simplify_line, polygon_rings
 from Skeletron.input import ParserOSM
 from Skeletron.draw import Canvas
 
@@ -20,8 +20,7 @@ if not network.edges():
 
 lines = network_multiline(network)
 poly = multiline_polygon(lines)
-skeleton = polygon_skeleton(poly)
-routes = skeleton_routes(skeleton)
+center = multiline_centerline(lines)
 
 # draw
 
@@ -33,8 +32,8 @@ xmin, ymin, xmax, ymax = min(xs), min(ys), max(xs), max(ys)
 canvas = Canvas(900, 600)
 canvas.fit(xmin - 50, ymax + 50, xmax + 50, ymin - 50)
 
-for route in reversed(routes):
-    line = simplify_line(route)
+for geom in center.geoms:
+    line = list(geom.coords)
 
     canvas.line(line, stroke=(1, 1, 1), width=10)
     for (x, y) in line:
@@ -43,10 +42,6 @@ for route in reversed(routes):
     canvas.line(line, stroke=(1, .6, .4), width=6)
     for (x, y) in line:
         canvas.dot(x, y, fill=(1, .6, .4), size=12)
-
-#for (v, w) in skeleton.edges():
-#    line = list(skeleton.edge[v][w]['line'].coords)
-#    canvas.line(line, stroke=(.4, .4, .4), width=2)
 
 for ring in polygon_rings(poly):
     canvas.line(list(ring.coords), stroke=(.9, .9, .9))

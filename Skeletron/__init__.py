@@ -6,7 +6,32 @@ from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_p
 from networkx.exception import NetworkXNoPath
 from networkx import Graph
 
-from .util import densify_line
+from .util import simplify_line, densify_line, polygon_rings
+
+def multiline_centerline(multiline, buffer=20, density=10, min_length=25):
+    """ Coalesce a linear street network to a centerline.
+    
+        Accepts and returns instances of shapely LineString and MultiLineString.
+    
+        Keyword arguments:
+        
+          buffer
+            Size of buffer in map units, should account for ground distance
+            between typical carriageways.
+          
+          density
+            Target density of perimeter points in map units, should be
+            approximately half the size of buffer.
+        
+          min_length
+            Minimum length of centerline portions to skip spurs and forks.
+    """
+    polygon = multiline_polygon(multiline, buffer, density)
+    skeleton = polygon_skeleton(polygon)
+    routes = skeleton_routes(skeleton, min_length)
+    lines = [simplify_line(route) for route in routes]
+    
+    return MultiLineString(lines)
 
 def network_multiline(network):
     """ Given a street network graph, returns a multilinestring.
@@ -17,7 +42,7 @@ def network_multiline(network):
     
     return multi
 
-def multiline_polygon(multiline, buffer=20, density=5):
+def multiline_polygon(multiline, buffer=20, density=10):
     """ Given a multilinestring, returns a buffered polygon.
     """
     prepolygon = multiline.buffer(buffer, 3)
@@ -38,20 +63,6 @@ def multiline_polygon(multiline, buffer=20, density=5):
         polygon = Polygon(exterior, interiors)
     
     return polygon
-
-def polygon_rings(polygon):
-    """ Given a buffer polygon, return a series of point rings.
-    """
-    if polygon.type == 'Polygon':
-        return [polygon.exterior] + list(polygon.interiors)
-    
-    rings = []
-    
-    for geom in polygon.geoms:
-        rings.append(geom.exterior)
-        rings.extend(list(geom.interiors))
-    
-    return rings
 
 def polygon_skeleton(polygon):
     """ Given a buffer polygon, return a skeleton graph.
@@ -107,7 +118,7 @@ def polygon_skeleton(polygon):
     return skeleton
 
 def skeleton_routes(skeleton, min_length=25):
-    """ Given a skeleton graph, return a series of (x, y) list routes.
+    """ Given a skeleton graph, return a series of (x, y) list routes ordered longest to shortest.
     """
     # it's destructive
     _skeleton = skeleton.copy()

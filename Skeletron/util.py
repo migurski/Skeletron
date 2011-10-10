@@ -64,3 +64,17 @@ def densify_line(points, distance):
             count -= 1
     
     return coords
+
+def polygon_rings(polygon):
+    """ Given a buffer polygon, return a series of point rings.
+    """
+    if polygon.type == 'Polygon':
+        return [polygon.exterior] + list(polygon.interiors)
+    
+    rings = []
+    
+    for geom in polygon.geoms:
+        rings.append(geom.exterior)
+        rings.extend(list(geom.interiors))
+    
+    return rings
