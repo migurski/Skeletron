@@ -1,4 +1,3 @@
-from time import sleep
 from subprocess import Popen, PIPE
 from itertools import combinations
     
@@ -64,23 +63,24 @@ def polygon_skeleton(polygon):
     
     rbox = '\n'.join( ['2', str(len(points))] + ['%.2f %.2f' % (x, y) for (x, y) in points] + [''] )
     
-    qhull = Popen('qvoronoi o'.split(), stdin=PIPE, stdout=PIPE)
-    qhull.stdin.write(rbox)
-    qhull.stdin.close()
-    sleep(.1) # this was once necessary, why?
-    qhull.wait()
-    qhull = qhull.stdout.read().splitlines()
-    
-    vert_count, poly_count = map(int, qhull[1].split()[:2])
+    qvoronoi = Popen('qvoronoi o'.split(), stdin=PIPE, stdout=PIPE)
+    output, error = qvoronoi.communicate(rbox)
+    voronoi_lines = output.splitlines()
     
     skeleton = Graph()
     
-    for (index, line) in enumerate(qhull[2:2+vert_count]):
+    if qvoronoi.returncode:
+        print 'Failed with code', qvoronoi.returncode
+        return skeleton
+    
+    vert_count, poly_count = map(int, voronoi_lines[1].split()[:2])
+    
+    for (index, line) in enumerate(voronoi_lines[2:2+vert_count]):
         point = Point(*map(float, line.split()[:2]))
         if point.within(polygon):
             skeleton.add_node(index, dict(point=point))
     
-    for line in qhull[2 + vert_count:2 + vert_count + poly_count]:
+    for line in voronoi_lines[2+vert_count:2+vert_count+poly_count]:
         indexes = map(int, line.split()[1:])
         for (v, w) in zip(indexes, indexes[1:] + indexes[:1]):
             if v not in skeleton.node or w not in skeleton.node:
