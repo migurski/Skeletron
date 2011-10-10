@@ -1,150 +1,59 @@
-from math import cos, sin
+from math import pi
 
-from PIL.ImageDraw import ImageDraw
+from cairo import Context, ImageSurface, FORMAT_RGB24, LINE_CAP_ROUND
 
-def draw_edge(edge, img, drawn, xform):
-    """ Draw an edge to an image, if it hasn't been drawn already.
-    """
-    if edge in drawn:
-        return
-    
-    x1, y1 = (xform is None) and (edge.p1.x, edge.p1.y) or xform(edge.p1.x, edge.p1.y)
-    x2, y2 = (xform is None) and (edge.p2.x, edge.p2.y) or xform(edge.p2.x, edge.p2.y)
+class Canvas:
 
-    draw = ImageDraw(img)
-    draw.line([(x1, y1), (x2, y2)], fill=(0xCC, 0xCC, 0xCC), width=2)
+    def __init__(self, width, height):
+        self.xform = lambda x, y: (x, y)
     
-    drawn.add(edge)
+        self.img = ImageSurface(FORMAT_RGB24, width, height)
+        self.ctx = Context(self.img)
+        
+        self.ctx.move_to(0, 0)
+        self.ctx.line_to(width, 0)
+        self.ctx.line_to(width, height)
+        self.ctx.line_to(0, height)
+        self.ctx.line_to(0, 0)
+        
+        self.ctx.set_source_rgb(1, 1, 1)
+        self.ctx.fill()
+        
+        self.width = width
+        self.height = height
+    
+    def fit(self, left, top, right, bottom):
+        xoff = left
+        yoff = top
+        
+        xscale = self.width / (right - left)
+        yscale = self.height / (bottom - top)
+        
+        if abs(xscale) > abs(yscale):
+            xscale *= abs(yscale) / abs(xscale)
+        
+        elif abs(xscale) < abs(yscale):
+            yscale *= abs(xscale) / abs(yscale)
 
-def draw_collision(collision, img, drawn, reach, xform):
-    """ Draw a collision and its rays to an image, if it hasn't been drawn already.
-    """
-    if collision in drawn:
-        return
+        self.xform = lambda x, y: ((x - xoff) * xscale, (y - yoff) * yscale)
+    
+    def dot(self, x, y, size=4, fill=(.5, .5, .5)):
+        x, y = self.xform(x, y)
 
-    draw_edge(collision.edge, img, drawn, xform)
-    draw_ray(collision.p_ray, img, drawn, reach, xform)
-    draw_ray(collision.n_ray, img, drawn, reach, xform)
+        self.ctx.arc(x, y, size/2., 0, 2*pi)
+        self.ctx.set_source_rgb(*fill)
+        self.ctx.fill()
     
-    if collision.point is None:
-        return
+    def line(self, points, stroke=(.5, .5, .5), width=1):
+        self.ctx.move_to(*self.xform(*points[0]))
+        
+        for (x, y) in points[1:]:
+            self.ctx.line_to(*self.xform(x, y))
+        
+        self.ctx.set_source_rgb(*stroke)
+        self.ctx.set_line_cap(LINE_CAP_ROUND)
+        self.ctx.set_line_width(width)
+        self.ctx.stroke()
     
-    p = collision.point
-    
-    x, y = (xform is None) and (p.x, p.y) or xform(p.x, p.y)
-    
-    draw = ImageDraw(img)
-    
-    x0, y0 = (xform is None) and (collision.point.x, collision.point.y) or xform(collision.point.x, collision.point.y)
-    x1, y1 = (xform is None) and (collision.p_ray.start.x, collision.p_ray.start.y) or xform(collision.p_ray.start.x, collision.p_ray.start.y)
-    x2, y2 = (xform is None) and (collision.n_ray.start.x, collision.n_ray.start.y) or xform(collision.n_ray.start.x, collision.n_ray.start.y)
-    draw.line([(x0, y0), (x1, y1)], fill=(0xFF, 0x99, 0x00))
-    draw.line([(x0, y0), (x2, y2)], fill=(0xFF, 0x99, 0x00))
-    
-    draw.line([(x - 2, y - 2), (x + 2, y + 2)], fill=(0x99, 0x99, 0x99), width=1)
-    draw.line([(x - 2, y + 2), (x + 2, y - 2)], fill=(0x99, 0x99, 0x99), width=1)
-    
-    drawn.add(collision)
-
-def draw_split(split, img, drawn, reach, xform):
-    """ Draw a split and its ray to an image, if it hasn't been drawn already.
-    """
-    if split in drawn:
-        return
-    
-    draw_edge(split.edge, img, drawn, xform)
-    draw_ray(split.ray, img, drawn, reach, xform)
-    
-    p = split.point
-
-    x, y = (xform is None) and (p.x, p.y) or xform(p.x, p.y)
-    x1, y1 = (xform is None) and (split.edge.p1.x, split.edge.p1.y) or xform(split.edge.p1.x, split.edge.p1.y)
-    x2, y2 = (xform is None) and (split.edge.p2.x, split.edge.p2.y) or xform(split.edge.p2.x, split.edge.p2.y)
-    x0, y0 = (x1 + x2) / 2, (y1 + y2) / 2
-    
-    draw = ImageDraw(img)
-    draw.rectangle([(x - 2, y - 2), (x + 2, y + 2)], fill=(0x66, 0x66, 0x66))
-    draw.line([(x, y), (x0, y0)], fill=(0x66, 0x66, 0x66))
-    
-    drawn.add(split)
-
-def draw_event(event, img, drawn, reach, xform):
-    """
-    """
-    if hasattr(event, 'edge') and hasattr(event, 'ray'):
-        # guess it's a split
-        return draw_split(event, img, drawn, reach, xform)
-
-    elif hasattr(event, 'n_ray') and hasattr(event, 'p_ray'):
-        # guess it's a collision
-        return draw_collision(event, img, drawn, reach, xform)
-
-    else:
-        # no idea
-        raise Exception('?')
-
-def draw_ray(ray, img, drawn, reach, xform):
-    """ Draw a ray and its tails to an image, if it hasn't been drawn already.
-    """
-    if ray in drawn:
-        return
-    
-    for tail in (ray.p_tail, ray.n_tail):
-        draw_tail(tail, img, drawn, reach, xform)
-    
-    p1 = ray.start
-    
-    x1, y1 = (xform is None) and (p1.x, p1.y) or xform(p1.x, p1.y)
-    x2, y2 = x1 + 10 * cos(ray.theta), y1 + 10 * sin(ray.theta)
-
-    color = ray.reflex and (0x00, 0x00, 0x00) or (0xFF, 0x33, 0x00)
-    
-    draw = ImageDraw(img)
-    draw.rectangle([(x1 - 1, y1 - 1), (x1 + 1, y1 + 1)], fill=color)
-    draw.line([(x1, y1), (x2, y2)], fill=color, width=2)
-    
-    x0, y0 = (xform is None) and (p1.x, p1.y) or xform(p1.x, p1.y)
-    x1, y1 = (xform is None) and (ray.p_tail.p_edge.p1.x, ray.p_tail.p_edge.p1.y) or xform(ray.p_tail.p_edge.p1.x, ray.p_tail.p_edge.p1.y)
-    x2, y2 = (xform is None) and (ray.p_tail.p_edge.p2.x, ray.p_tail.p_edge.p2.y) or xform(ray.p_tail.p_edge.p2.x, ray.p_tail.p_edge.p2.y)
-    x3, y3 = (xform is None) and (ray.n_tail.n_edge.p1.x, ray.n_tail.n_edge.p1.y) or xform(ray.n_tail.n_edge.p1.x, ray.n_tail.n_edge.p1.y)
-    x4, y4 = (xform is None) and (ray.n_tail.n_edge.p2.x, ray.n_tail.n_edge.p2.y) or xform(ray.n_tail.n_edge.p2.x, ray.n_tail.n_edge.p2.y)
-    draw.line([(x0, y0), ((x1 + x2) / 2, (y1 + y2) / 2)], fill=(0xEE, 0xEE, 0xEE))
-    draw.line([(x0, y0), ((x3 + x4) / 2, (y3 + y4) / 2)], fill=(0xEE, 0xEE, 0xEE))
-    
-    drawn.add(ray)
-
-def draw_peak(peak, img, drawn, reach, xform):
-    """ Draw a peak's tails to an image, if it hasn't been drawn already.
-    """
-    if peak in drawn:
-        return
-    
-    for tail in peak.tails:
-        draw_tail(tail, img, drawn, reach, xform)
-    
-    drawn.add(peak)
-
-def draw_tail(tail, img, drawn, reach, xform):
-    """ Draw a tail and its tree of edges to an image, if it hasn't been drawn already.
-    """
-    if tail in drawn:
-        return
-    
-    #for edge in (tail.p_edge, tail.n_edge):
-    #    draw_edge(edge, img, drawn, xform)
-    
-    for other in tail.tails:
-        draw_tail(other, img, drawn, reach, xform)
-    
-    p1 = tail.start
-    p2 = tail.end
-
-    x1, y1 = (xform is None) and (p1.x, p1.y) or xform(p1.x, p1.y)
-    x2, y2 = (xform is None) and (p2.x, p2.y) or xform(p2.x, p2.y)
-    
-    color = (tail.reach(reach) > reach) and (0x00, 0x66, 0xFF) or (0x66, 0xFF, 0xFF)
-    
-    draw = ImageDraw(img)
-    draw.line([(x1, y1), (x2, y2)], fill=color, width=1)
-    
-    drawn.add(tail)
+    def save(self, filename):
+        self.img.write_to_png(filename)

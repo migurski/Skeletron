@@ -3,14 +3,15 @@ from math import hypot, ceil
 
 from shapely.geometry import Polygon
 
-from Skeletron2 import ParserOSM, Canvas, network_multiline, multiline_polygon, polygon_rings, polygon_skeleton, skeleton_routes, simplify_line
+from Skeletron2 import ParserOSM, network_multiline, multiline_polygon, polygon_rings, polygon_skeleton, skeleton_routes, simplify_line
+from Skeletron.draw import Canvas
 
 p = ParserOSM()
 g = p.parse(stdin.read())
 
 print sorted(g.keys())
 
-network = g[(u'Lakeside Drive', u'secondary')]
+network = g[(u'Thomas L. Berkley Way', u'secondary')]
 
 if not network.edges():
     exit(1)
