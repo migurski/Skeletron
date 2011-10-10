@@ -8,7 +8,7 @@ from Skeletron import network_multiline, multiline_polygon, polygon_skeleton, sk
 from Skeletron.input import ParserOSM, merc
 
 p = ParserOSM()
-g = p.parse(stdin.read())
+g = p.parse(stdin)
 
 output = dict(type='FeatureCollection', features=[])
 

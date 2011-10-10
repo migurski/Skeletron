@@ -9,7 +9,7 @@ from Skeletron.input import ParserOSM
 from Skeletron.draw import Canvas
 
 p = ParserOSM()
-g = p.parse(stdin.read())
+g = p.parse(stdin)
 
 print sorted(g.keys())
 
