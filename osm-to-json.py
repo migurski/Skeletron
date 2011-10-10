@@ -4,7 +4,7 @@ from json import dump
 
 from shapely.geometry import Polygon, MultiLineString
 
-from Skeletron2 import network_multiline, multiline_polygon, polygon_rings, polygon_skeleton, skeleton_routes
+from Skeletron import network_multiline, multiline_polygon, polygon_rings, polygon_skeleton, skeleton_routes
 from Skeletron.input import ParserOSM, merc
 
 p = ParserOSM()
