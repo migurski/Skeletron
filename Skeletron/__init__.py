@@ -75,6 +75,16 @@ def graph_routes(graph, weight):
     while True:
         leaves = [index for index in _graph.nodes() if _graph.degree(index) == 1]
         
+        if len(leaves) == 1:
+            # add Y-junctions because with a single leaf, we'll get nowhere
+            leaves += [index for index in _graph.nodes() if _graph.degree(index) == 3]
+        
+        elif len(leaves) == 0:
+            # just pick an arbitrary node and its neighbor out of the infinite loop
+            node = [index for index in _graph.nodes() if _graph.degree(index) == 2][0]
+            neighbor = _graph.neighbors(node)[0]
+            leaves = [node, neighbor]
+
         paths = []
         
         for (v, w) in combinations(leaves, 2):
