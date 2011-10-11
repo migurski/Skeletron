@@ -1,6 +1,8 @@
-from sys import argv, stdin, stderr
+from sys import argv, stdin, stderr, stdout
 from optparse import OptionParser
+from re import compile
 from json import dump
+from math import pi
 
 from shapely.geometry import MultiLineString
 
@@ -26,16 +28,25 @@ def highway_key(tags):
 
 optparser = OptionParser(usage="""%prog <osm input file> <geojson output file>""")
 
-defaults = dict()
+defaults = dict(zoom=12, width=10)
 
 optparser.set_defaults(**defaults)
+
+optparser.add_option('-z', '--zoom', dest='zoom',
+                     type='int', help='Zoom level. Default value is %s.' % repr(defaults['zoom']))
+
+optparser.add_option('-w', '--width', dest='width',
+                     type='float', help='Line width at zoom level. Default value is %s.' % repr(defaults['width']))
 
 if __name__ == '__main__':
     
     options, (input_file, output_file) = optparser.parse_args()
     
+    buffer = options.width / 2
+    buffer *= (2 * pi * 6378137) / (2**(options.zoom + 8))
+    
     input = (input_file == '-') and stdin or open(input_file)
-    output = dict(type='FeatureCollection', features=[])
+    geojson = dict(type='FeatureCollection', features=[])
 
     network = ParserOSM().parse(input, highway_key)
     multilines = dict()
@@ -54,10 +65,15 @@ if __name__ == '__main__':
                 print >> stderr, 'Found', ref
                 multilines[ref] = multiline
     
+    kwargs = dict(buffer=buffer, density=buffer/2, min_length=2*buffer, min_area=(buffer**2)/4)
+
+    print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
+    print >> stderr, '-' * 20
+
     for (ref, multiline) in multilines.items():
-        print ref, str(multiline)[:128]
+        print >> stderr, ref, str(multiline)[:128]
         
-        centerline = multiline_centerline(multiline, buffer=400, density=100, min_length=400)
+        centerline = multiline_centerline(multiline, **kwargs)
         
         if not centerline:
             continue
@@ -67,6 +83,7 @@ if __name__ == '__main__':
         properties = dict(ref=ref)
         
         feature = dict(geometry=geometry, properties=properties)
-        output['features'].append(feature)
-
-dump(output, open(output_file, 'w'))
+        geojson['features'].append(feature)
+    
+    output = (output_file == '-') and stdout or open(output_file, 'w')
+    dump(geojson, output)

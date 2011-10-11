@@ -8,7 +8,7 @@ from networkx import Graph
 
 from .util import simplify_line, densify_line, polygon_rings
 
-def multiline_centerline(multiline, buffer=20, density=10, min_length=25, min_area=100):
+def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_area=100):
     """ Coalesce a linear street network to a centerline.
     
         Accepts and returns instances of shapely LineString and MultiLineString.
@@ -24,12 +24,13 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=25, min_ar
             approximately half the size of buffer.
         
           min_length
-            Minimum length of centerline portions to skip spurs and forks.
+            Minimum length of centerline portions to skip spurs and forks,
+            should be about twice buffer.
         
           min_area
             Minimum area of roads kinks for them to be maintained through
             generalization by util.simplify_line(), should be approximately
-            min_length squared.
+            one quarter of buffer squared.
     """
     polygon = multiline_polygon(multiline, buffer, density)
     skeleton = polygon_skeleton(polygon)
