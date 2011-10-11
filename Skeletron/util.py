@@ -5,10 +5,7 @@ from shapely.geometry import Polygon
 def simplify_line(points, small_area=100):
     """ Simplify a line of points using V-W down to the given area.
     """
-    if len(points) < 3:
-        return list(points)
-
-    while True:
+    while len(points) > 3:
         
         # For each coordinate that forms the apex of a two-segment
         # triangle, find the area of that triangle and put it into a list
@@ -44,7 +41,7 @@ def simplify_line(points, small_area=100):
         # reduce the line, then try again
         points = [point for (index, point) in enumerate(points) if index not in popped]
     
-    return points
+    return list(points)
 
 def densify_line(points, distance):
     """ Densify a line of points using the given distance.
