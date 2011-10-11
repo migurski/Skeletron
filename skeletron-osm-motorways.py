@@ -1,4 +1,5 @@
 from sys import argv, stdin, stderr, stdout
+from csv import DictReader
 from itertools import combinations
 from optparse import OptionParser
 from re import compile
@@ -42,9 +43,19 @@ optparser.add_option('-z', '--zoom', dest='zoom',
 optparser.add_option('-w', '--width', dest='width',
                      type='float', help='Line width at zoom level. Default value is %s.' % repr(defaults['width']))
 
+optparser.add_option('-k', '--keys', dest='keys_file',
+                     help='Blah blah blah')
+
 if __name__ == '__main__':
     
     options, (input_file, output_file) = optparser.parse_args()
+    
+    if options.keys_file:
+        ref_keys = [(row['ref'], (row['network'], row['number'])) for row in DictReader(open(options.keys_file))]
+        ref_keys = dict(ref_keys)
+
+    else:
+        ref_keys = None
     
     buffer = options.width / 2
     buffer *= (2 * pi * earth_radius) / (2**(options.zoom + 8))
@@ -63,40 +74,23 @@ if __name__ == '__main__':
         
         for ref in refs.split(';'):
             ref = ref.strip()
-
-            if ref in multilines:
-                print >> stderr, 'Adding to "%s"' % ref
-                multilines[ref] = multilines[ref].union(multiline)
+            
+            if ref_keys and ref not in ref_keys:
+                continue
+            
+            elif ref in ref_keys:
+                key = None, ref_keys[ref][0], ref_keys[ref][1]
             
             else:
-                print >> stderr, 'Found "%s"' % ref
-                multilines[ref] = multiline
-    
-    #
-    # Matching
-    #
-    
-    refs = multilines.keys()
-    pairs = []
-    
-    for (this_ref, that_ref) in combinations(refs, 2):
-        this_num = numbers_pat.sub(r'\1', this_ref)
-        that_num = numbers_pat.sub(r'\1', that_ref)
-        
-        if this_num == that_num:
-            if input is stdin:
-                print >> stderr, '"%s" matches "%s"' % (this_ref, that_ref)
-                pairs.append((this_ref, that_ref))
-    
-    for (this_ref, that_ref) in pairs:
-        if this_ref not in multilines or not multilines[this_ref]:
-            continue
-    
-        if that_ref not in multilines or not multilines[that_ref]:
-            continue
-    
-        multilines[this_ref] = multilines[this_ref].union(multilines[that_ref])
-        del multilines[that_ref]
+                key = ref, None, None
+
+            if key in multilines:
+                print >> stderr, 'Adding to', key
+                multilines[key] = multilines[key].union(multiline)
+            
+            else:
+                print >> stderr, 'Found', key
+                multilines[key] = multiline
     
     #
     # Output
@@ -108,17 +102,17 @@ if __name__ == '__main__':
     print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
     print >> stderr, '-' * 20
 
-    for (ref, multiline) in multilines.items():
-        print >> stderr, ref, '...'
+    for ((ref, network, number), multiline) in sorted(multilines.items()):
+        print >> stderr, ref, network, number, '...'
         
         centerline = multiline_centerline(multiline, **kwargs)
         
         if not centerline:
             continue
         
+        properties = dict(ref=ref, network=network, number=number)
         coords = [[mercator(*point, inverse=True) for point in geom.coords] for geom in centerline.geoms]
         geometry = MultiLineString(coords).__geo_interface__
-        properties = dict(ref=ref)
         
         feature = dict(geometry=geometry, properties=properties)
         geojson['features'].append(feature)
