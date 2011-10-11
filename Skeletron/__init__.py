@@ -36,6 +36,9 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=25, min_ar
     routes = skeleton_routes(skeleton, min_length)
     lines = [simplify_line(route, min_area) for route in routes]
     
+    if not lines:
+        return False
+    
     return MultiLineString(lines)
 
 def network_multiline(network):
