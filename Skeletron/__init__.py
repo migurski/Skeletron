@@ -1,3 +1,4 @@
+from sys import stderr
 from subprocess import Popen, PIPE
 from itertools import combinations
     
@@ -32,54 +33,97 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
             generalization by util.simplify_line(), should be approximately
             one quarter of buffer squared.
     """
-    polygon = multiline_polygon(multiline, buffer, density)
-    skeleton = polygon_skeleton(polygon)
+    if not multiline:
+        return False
+    
+    geoms = hasattr(multiline, 'geoms') and multiline.geoms or [multiline]
+    counts = [len(geom.coords) for geom in geoms]
+
+    print >> stderr, ' ', len(geoms), 'linear parts with', sum(counts), 'points',
+    
+    geoms = [simplify_line(list(geom.coords), min_area) for geom in geoms]
+    counts = [len(geom) for geom in geoms]
+
+    print >> stderr, 'reduced to', sum(counts), 'points.'
+    
+    multiline = MultiLineString(geoms)
+    polygon = multiline_polygon(multiline, buffer)
+    skeleton = polygon_skeleton(polygon, density)
     routes = skeleton_routes(skeleton, min_length)
     lines = [simplify_line(route, min_area) for route in routes]
+    
+    print >> stderr, ' ', sum(map(len, routes)), 'centerline points reduced to', sum(map(len, lines)), 'final points.'
     
     if not lines:
         return False
     
     return MultiLineString(lines)
 
+def graph_routes(graph, weight):
+    """ Return a list of routes through a network as (x, y) pair lists, with no edge repeated.
+    
+        Each node in the graph must have a "point" attribute with a Point object.
+        
+        Weight is passed directly to shortest_path() and shortest_path_length()
+        in networkx.algorithms.shortest_paths.generic.
+    """
+    # it's destructive
+    _graph = graph.copy()
+    
+    routes = []
+    
+    while True:
+        leaves = [index for index in _graph.nodes() if _graph.degree(index) == 1]
+        
+        paths = []
+        
+        for (v, w) in combinations(leaves, 2):
+            try:
+                path = shortest_path_length(_graph, v, w, weight), v, w
+            except NetworkXNoPath:
+                pass
+            else:
+                paths.append(path)
+    
+        if not paths:
+            break
+        
+        paths.sort(reverse=True)
+        indexes = shortest_path(_graph, paths[0][1], paths[0][2], weight)
+
+        for (v, w) in zip(indexes[:-1], indexes[1:]):
+            _graph.remove_edge(v, w)
+        
+        points = [_graph.node[index]['point'] for index in indexes]
+        coords = [(point.x, point.y) for point in points]
+        routes.append(coords)
+
+        if not _graph.edges():
+            break
+    
+    return routes
+
 def network_multiline(network):
     """ Given a street network graph, returns a multilinestring.
     """
-    pairs = [(network.node[a]['point'], network.node[b]['point']) for (a, b) in network.edges()]
-    lines = [((p1.x, p1.y), (p2.x, p2.y)) for (p1, p2) in pairs]
-    multi = MultiLineString(lines)
+    routes = graph_routes(network, None)
     
-    return multi
+    return routes and MultiLineString(routes) or None
 
-def multiline_polygon(multiline, buffer=20, density=10):
+def multiline_polygon(multiline, buffer=20):
     """ Given a multilinestring, returns a buffered polygon.
     """
-    prepolygon = multiline.buffer(buffer, 3)
-    
-    if prepolygon.type == 'MultiPolygon':
-        geoms = []
-        
-        for polygon in prepolygon.geoms:
-            geom = []
-            geom.append(densify_line(polygon.exterior.coords, density))
-            geom.append([densify_line(ring.coords, density) for ring in polygon.interiors])
-            geoms.append(geom)
-        
-        polygon = MultiPolygon(geoms)
-    else:
-        exterior = densify_line(prepolygon.exterior.coords, density)
-        interiors = [densify_line(ring.coords, density) for ring in prepolygon.interiors]
-        polygon = Polygon(exterior, interiors)
-    
-    return polygon
+    return multiline.buffer(buffer, 3)
 
-def polygon_skeleton(polygon):
+def polygon_skeleton(polygon, density=10):
     """ Given a buffer polygon, return a skeleton graph.
     """
     points = []
     
     for ring in polygon_rings(polygon):
-        points.extend(list(ring.coords))
+        points.extend(densify_line(list(ring.coords), density))
+    
+    print >> stderr, ' ', len(points), 'perimeter points',
     
     rbox = '\n'.join( ['2', str(len(points))] + ['%.2f %.2f' % (x, y) for (x, y) in points] + [''] )
     
@@ -124,47 +168,13 @@ def polygon_skeleton(polygon):
                     skeleton.remove_node(index)
                     removing = True
     
+    print >> stderr, 'contain', len(skeleton.edge), 'internal edges.'
+    
     return skeleton
 
 def skeleton_routes(skeleton, min_length=25):
     """ Given a skeleton graph, return a series of (x, y) list routes ordered longest to shortest.
     """
-    # it's destructive
-    _skeleton = skeleton.copy()
+    routes = graph_routes(skeleton, 'length')
     
-    routes = []
-    
-    while True:
-        leaves = [index for index in _skeleton.nodes() if _skeleton.degree(index) == 1]
-    
-        paths = []
-    
-        for (v, w) in combinations(leaves, 2):
-            try:
-                path = shortest_path_length(_skeleton, v, w, 'length'), v, w
-            except NetworkXNoPath:
-                pass
-            else:
-                paths.append(path)
-    
-        if not paths:
-            break
-        
-        paths.sort(reverse=True)
-        indexes = shortest_path(_skeleton, paths[0][1], paths[0][2], 'length')
-
-        for (v, w) in zip(indexes[:-1], indexes[1:]):
-            _skeleton.remove_edge(v, w)
-        
-        line = [_skeleton.node[index]['point'] for index in indexes]
-        route = [(point.x, point.y) for point in line]
-        segments = [LineString([p1, p2]) for (p1, p2) in zip(route[:-1], route[1:])]
-        length = sum( [segment.length for segment in segments] )
-        
-        if length > min_length:
-            routes.append(route)
-        
-        if not _skeleton.edges():
-            break
-    
-    return routes
+    return [route for route in routes if LineString(route).length > min_length]
