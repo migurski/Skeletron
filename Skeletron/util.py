@@ -1,4 +1,8 @@
+from sys import stdin, stdout
 from math import hypot, ceil
+from os.path import splitext
+from gzip import GzipFile
+from bz2 import BZ2File
 
 from shapely.geometry import Polygon
 
@@ -75,3 +79,22 @@ def polygon_rings(polygon):
         rings.extend(list(geom.interiors))
     
     return rings
+
+def open_file(name, mode='r'):
+    """
+    """
+    if name == '-' and mode == 'r':
+        return stdin
+
+    if name == '-' and mode == 'w':
+        return stdout
+    
+    base, ext = splitext(name)
+    
+    if ext == '.bz2':
+        return BZ2File(name, mode)
+
+    if ext == '.gz':
+        return GzipFile(name, mode)
+
+    return open(name, mode)
