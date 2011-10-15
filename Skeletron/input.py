@@ -1,11 +1,5 @@
 from xml.parsers.expat import ParserCreate
 
-from shapely.geometry import Point
-from pyproj import Proj
-from networkx import Graph
-
-mercator = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over')
-
 def name_highway_key(tags):
     """
     """
@@ -37,37 +31,15 @@ class ParserOSM:
         #self.p.CharacterDataHandler = char_data
     
     def parse(self, input, key_func=name_highway_key):
-        """ Given a file-like stream of OSM XML data, return a dictionary of network graphs.
+        """ Given a file-like stream of OSM XML data, return dictionaries of ways and nodes.
         
             Keys are generated from way tags based on the key_func argument.
-            
-            Each network graph node will have a "point" attribute with
-            the node's location projected to spherical mercator.
         """
         self.nodes = dict()
         self.ways = dict()
         self.key = key_func
         self.p.ParseFile(input)
-        return self.graph_response()
-    
-    def graph_response(self):
-        graphs = dict()
-        
-        for (id, way) in self.ways.items():
-            key = way['key']
-            node_ids = way['nodes']
-            
-            if key not in graphs:
-                graphs[key] = Graph()
-            
-            edges = zip(node_ids[:-1], node_ids[1:])
-            
-            for (id_, _id) in edges:
-                graphs[key].add_node(id_, dict(point=self.nodes[id_]))
-                graphs[key].add_node(_id, dict(point=self.nodes[_id]))
-                graphs[key].add_edge(id_, _id)
-        
-        return graphs
+        return self.ways, self.nodes
     
     def start_element(self, name, attrs):
         if name == 'node':
@@ -87,8 +59,7 @@ class ParserOSM:
             self.end_way()
 
     def add_node(self, id, lat, lon):
-        x, y = mercator(lon, lat)
-        self.nodes[id] = Point(x, y)
+        self.nodes[id] = lat, lon
     
     def add_way(self, id):
         self.way = id

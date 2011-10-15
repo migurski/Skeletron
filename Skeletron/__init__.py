@@ -3,9 +3,17 @@ from subprocess import Popen, PIPE
 from itertools import combinations
     
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon
-from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_path_length
-from networkx.exception import NetworkXNoPath
-from networkx import Graph
+from pyproj import Proj
+
+try:
+    from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_path_length
+    from networkx.exception import NetworkXNoPath
+    from networkx import Graph
+except ImportError:
+    # won't work but we can muddle through
+    pass
+
+mercator = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over')
 
 from .util import simplify_line, densify_line, polygon_rings
 
@@ -112,6 +120,33 @@ def graph_routes(graph, weight):
             break
     
     return routes
+
+def waynode_networks(ways, nodes):
+    """ Return a dictionary of network graphs from dictionaries of ways and nodes.
+        
+        Each network graph node will have a "point" attribute with
+        the node's location projected to spherical mercator.
+    """
+    networks = dict()
+    
+    for (id, way) in ways.items():
+        key = way['key']
+        node_ids = way['nodes']
+        
+        if key not in networks:
+            networks[key] = Graph()
+        
+        edges = zip(node_ids[:-1], node_ids[1:])
+        
+        for (id_, _id) in edges:
+            point_ = Point(*mercator(*reversed(nodes[id_])))
+            _point = Point(*mercator(*reversed(nodes[_id])))
+        
+            networks[key].add_node(id_, dict(point=point_))
+            networks[key].add_node(_id, dict(point=_point))
+            networks[key].add_edge(id_, _id)
+    
+    return networks
 
 def network_multiline(network):
     """ Given a street network graph, returns a multilinestring.
