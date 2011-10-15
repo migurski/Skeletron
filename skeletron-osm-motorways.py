@@ -66,10 +66,10 @@ if __name__ == '__main__':
     
     input = (input_file == '-') and stdin or open(input_file)
     
-    network = ParserOSM().parse(input, highway_key)
+    networks = ParserOSM().parse(input, highway_key)
     multilines = dict()
     
-    for (refs, network) in network.items():
+    for (refs, network) in networks.items():
         multiline = network_multiline(network)
         
         for ref in refs.split(';'):
