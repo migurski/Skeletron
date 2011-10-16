@@ -25,7 +25,7 @@ if __name__ == '__main__':
     output = writer(open_file(output_file, 'w'))
     
     tag_names = options.tags.split(',')
-    output.writerow(['input:' + tag for tag in tag_names])
+    output.writerow(['input ' + tag for tag in tag_names])
     
     def key_func(way_tags):
         return tuple( [way_tags.get(tag_name, None) for tag_name in tag_names] )
