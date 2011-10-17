@@ -82,7 +82,7 @@ if __name__ == '__main__':
     multilines = dict()
     
     for ((refs, highway), network) in networks.items():
-        multiline = network_multiline(network)
+        multiline = None
         
         for ref in refs.split(';'):
             ref = ref.strip()
@@ -97,6 +97,9 @@ if __name__ == '__main__':
             else:
                 key = (ref, highway)
 
+            if multiline is None:
+                multiline = network_multiline(network)
+            
             if key in multilines:
                 print >> stderr, 'Adding to', key
                 multilines[key] = multilines[key].union(multiline)
