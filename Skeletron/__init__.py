@@ -6,7 +6,7 @@ from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiP
 from pyproj import Proj
 
 try:
-    from networkx.algorithms.shortest_paths.generic import shortest_path, shortest_path_length
+    from networkx.algorithms.shortest_paths.astar import astar_path, astar_path_length
     from networkx.exception import NetworkXNoPath
     from networkx import Graph
 except ImportError:
@@ -72,11 +72,15 @@ def graph_routes(graph, weight):
     
         Each node in the graph must have a "point" attribute with a Point object.
         
-        Weight is passed directly to shortest_path() and shortest_path_length()
+        Weight is passed directly to astar_path() and astar_path_length()
         in networkx.algorithms.shortest_paths.generic.
     """
     # it's destructive
     _graph = graph.copy()
+    
+    # heuristic function for A* path-finding functions, see also:
+    # http://networkx.lanl.gov/reference/algorithms.shortest_paths.html#module-networkx.algorithms.shortest_paths.astar
+    heuristic = lambda n1, n2: _graph.node[n1]['point'].distance(_graph.node[n2]['point'])
     
     routes = []
     
@@ -97,7 +101,7 @@ def graph_routes(graph, weight):
         
         for (v, w) in combinations(leaves, 2):
             try:
-                path = shortest_path_length(_graph, v, w, weight), v, w
+                path = astar_path_length(_graph, v, w, heuristic, weight), v, w
             except NetworkXNoPath:
                 pass
             else:
@@ -107,7 +111,7 @@ def graph_routes(graph, weight):
             break
         
         paths.sort(reverse=True)
-        indexes = shortest_path(_graph, paths[0][1], paths[0][2], weight)
+        indexes = astar_path(_graph, paths[0][1], paths[0][2], heuristic, weight)
 
         for (v, w) in zip(indexes[:-1], indexes[1:]):
             _graph.remove_edge(v, w)
