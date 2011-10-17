@@ -6,7 +6,7 @@ from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiP
 from pyproj import Proj
 
 try:
-    from networkx.algorithms.shortest_paths.astar import astar_path, astar_path_length
+    from networkx.algorithms.shortest_paths.astar import astar_path
     from networkx.exception import NetworkXNoPath
     from networkx import Graph
 except ImportError:
@@ -55,28 +55,35 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
     print >> stderr, 'reduced to', sum(counts), 'points.'
     
     multiline = MultiLineString(geoms)
-    polygon = multiline_polygon(multiline, buffer)
-    skeleton = polygon_skeleton(polygon, density)
-    routes = skeleton_routes(skeleton, min_length)
-    lines = [simplify_line(route, min_area) for route in routes]
+    multipoly = multiline_polygon(multiline, buffer)
     
-    print >> stderr, ' ', sum(map(len, routes)), 'centerline points reduced to', sum(map(len, lines)), 'final points.'
+    lines, points = [], 0
+    
+    for ring in polygon_rings(multipoly):
+        polygon = Polygon(ring)
+        skeleton = polygon_skeleton(polygon, density)
+        routes = skeleton_routes(skeleton, min_length)
+
+        points += sum(map(len, routes))
+        lines.extend([simplify_line(route, min_area) for route in routes])
+    
+    print >> stderr, ' ', points, 'centerline points reduced to', sum(map(len, lines)), 'final points.'
     
     if not lines:
         return False
     
     return MultiLineString(lines)
 
-def graph_routes(graph, weight):
+def graph_routes(graph, find_longest):
     """ Return a list of routes through a network as (x, y) pair lists, with no edge repeated.
     
         Each node in the graph must have a "point" attribute with a Point object.
-        
-        Weight is passed directly to astar_path() and astar_path_length()
-        in networkx.algorithms.shortest_paths.generic.
     """
     # it's destructive
     _graph = graph.copy()
+    
+    # passed directly to shortest_path()
+    weight = find_longest and 'length' or None
     
     # heuristic function for A* path-finding functions, see also:
     # http://networkx.lanl.gov/reference/algorithms.shortest_paths.html#module-networkx.algorithms.shortest_paths.astar
@@ -85,42 +92,39 @@ def graph_routes(graph, weight):
     routes = []
     
     while True:
+        if not _graph.edges():
+            break
+    
         leaves = [index for index in _graph.nodes() if _graph.degree(index) == 1]
         
-        if len(leaves) == 1:
+        if len(leaves) == 1 or not find_longest:
             # add Y-junctions because with a single leaf, we'll get nowhere
             leaves += [index for index in _graph.nodes() if _graph.degree(index) == 3]
         
-        elif len(leaves) == 0:
+        if len(leaves) == 0:
             # just pick an arbitrary node and its neighbor out of the infinite loop
             node = [index for index in _graph.nodes() if _graph.degree(index) == 2][0]
             neighbor = _graph.neighbors(node)[0]
             leaves = [node, neighbor]
 
-        paths = []
+        distances = [(_graph.node[v]['point'].distance(_graph.node[w]['point']), v, w)
+                     for (v, w) in combinations(leaves, 2)]
         
-        for (v, w) in combinations(leaves, 2):
+        for (distance, v, w) in sorted(distances, reverse=find_longest):
             try:
-                path = astar_path_length(_graph, v, w, heuristic, weight), v, w
+                indexes = astar_path(_graph, v, w, heuristic, weight)
             except NetworkXNoPath:
-                pass
-            else:
-                paths.append(path)
+                # try another
+                continue
     
-        if not paths:
-            break
-        
-        paths.sort(reverse=True)
-        indexes = astar_path(_graph, paths[0][1], paths[0][2], heuristic, weight)
-
-        for (v, w) in zip(indexes[:-1], indexes[1:]):
-            _graph.remove_edge(v, w)
-        
-        points = [_graph.node[index]['point'] for index in indexes]
-        coords = [(point.x, point.y) for point in points]
-        routes.append(coords)
-
-        if not _graph.edges():
+            for (v, w) in zip(indexes[:-1], indexes[1:]):
+                _graph.remove_edge(v, w)
+            
+            points = [_graph.node[index]['point'] for index in indexes]
+            coords = [(point.x, point.y) for point in points]
+            routes.append(coords)
+            
+            # move on to the next possible route
             break
     
     return routes
@@ -155,7 +159,7 @@ def waynode_networks(ways, nodes):
 def network_multiline(network):
     """ Given a street network graph, returns a multilinestring.
     """
-    routes = graph_routes(network, None)
+    routes = graph_routes(network, False)
     
     return routes and MultiLineString(routes) or None
 
@@ -167,10 +171,15 @@ def multiline_polygon(multiline, buffer=20):
 def polygon_skeleton(polygon, density=10):
     """ Given a buffer polygon, return a skeleton graph.
     """
+    skeleton = Graph()
     points = []
     
     for ring in polygon_rings(polygon):
         points.extend(densify_line(list(ring.coords), density))
+    
+    if len(points) <= 4:
+        # don't bother with this one
+        return skeleton
     
     print >> stderr, ' ', len(points), 'perimeter points',
     
@@ -180,11 +189,8 @@ def polygon_skeleton(polygon, density=10):
     output, error = qvoronoi.communicate(rbox)
     voronoi_lines = output.splitlines()
     
-    skeleton = Graph()
-    
     if qvoronoi.returncode:
-        print 'Failed with code', qvoronoi.returncode
-        return skeleton
+        raise Exception('Failed with code %s' % qvoronoi.returncode)
     
     vert_count, poly_count = map(int, voronoi_lines[1].split()[:2])
     
@@ -224,6 +230,6 @@ def polygon_skeleton(polygon, density=10):
 def skeleton_routes(skeleton, min_length=25):
     """ Given a skeleton graph, return a series of (x, y) list routes ordered longest to shortest.
     """
-    routes = graph_routes(skeleton, 'length')
+    routes = graph_routes(skeleton, True)
     
     return [route for route in routes if LineString(route).length > min_length]
