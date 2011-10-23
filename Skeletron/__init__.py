@@ -156,12 +156,23 @@ def waynode_networks(ways, nodes):
     
     return networks
 
-def network_multiline(network):
-    """ Given a street network graph, returns a multilinestring.
+def networks_multilines(networks):
+    """ Converts dictionary of street line networks to dictionary of multilines.
     """
-    routes = graph_routes(network, False)
+    multilines = dict()
     
-    return routes and MultiLineString(routes) or None
+    for (key, network) in networks.items():
+        routes = graph_routes(network, False)
+        
+        if routes:
+            print >> stderr, 'Found', key
+            multilines[key] = MultiLineString(routes)
+        
+        else:
+            print >> stderr, 'Ignored', key
+            continue
+        
+    return multilines
 
 def multiline_polygon(multiline, buffer=20):
     """ Given a multilinestring, returns a buffered polygon.

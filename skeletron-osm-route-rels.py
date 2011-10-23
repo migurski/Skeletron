@@ -8,7 +8,7 @@ from math import pi
 
 from shapely.geometry import MultiLineString
 
-from Skeletron import waynode_networks, network_multiline, multiline_centerline, mercator
+from Skeletron import waynode_networks, networks_multilines, multiline_centerline, mercator
 from Skeletron.input import parse_route_relation_waynodes
 from Skeletron.util import open_file
 
@@ -41,19 +41,7 @@ if __name__ == '__main__':
     
     ways, nodes = parse_route_relation_waynodes(input)
     networks = waynode_networks(ways, nodes)
-
-    multilines = dict()
-    
-    for (key, network) in networks.items():
-        multiline = network_multiline(network)
-        
-        if key in multilines:
-            print >> stderr, 'Adding to', key
-            multilines[key] = multilines[key].union(multiline)
-        
-        else:
-            print >> stderr, 'Found', key
-            multilines[key] = multiline
+    multilines = networks_multilines(networks)
     
     #
     # Output
