@@ -137,7 +137,7 @@ def waynode_networks(ways, nodes):
     """
     networks = dict()
     
-    for (id, way) in ways.items():
+    for way in ways.values():
         key = way['key']
         node_ids = way['nodes']
         
