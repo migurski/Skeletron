@@ -9,7 +9,7 @@ from math import pi
 from shapely.geometry import MultiLineString
 
 from Skeletron import waynode_networks, network_multiline, multiline_centerline, mercator
-from Skeletron.input import ParserOSM
+from Skeletron.input import parse_street_waynodes
 from Skeletron.util import open_file
 
 earth_radius = 6378137
@@ -39,7 +39,9 @@ if __name__ == '__main__':
     
     input = open_file(input_file, 'r')
     
-    networks = waynode_networks(*ParserOSM().parse(input))
+    ways, nodes = parse_street_waynodes(input)
+    networks = waynode_networks(ways, nodes)
+
     multilines = dict()
     
     for (key, network) in networks.items():

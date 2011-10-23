@@ -1,9 +1,10 @@
-from sys import stderr
 from copy import deepcopy
 from xml.parsers.expat import ParserCreate
 
 def name_highway_key(tags):
-    """
+    """ Convert way tags to name, highway keys.
+    
+        Used by ParserOSM.parse().
     """
     if 'name' not in tags:
         return None
@@ -14,13 +15,12 @@ def name_highway_key(tags):
     if not tags['name'] or not tags['highway']:
         return None
     
-    #if tags['highway'] == 'motorway':
-    #    return None
-
     return tags['name'], tags['highway']
 
 def network_ref_key(tags):
-    """
+    """ Convert relation tags to network, ref keys.
+    
+        Used by ParserOSM.parse().
     """
     if 'network' not in tags:
         return None
@@ -34,24 +34,33 @@ def network_ref_key(tags):
     return tags['network'], tags['ref']
 
 def name_highway_ref_key(tags):
-    """
+    """ Convert way tags to name, highway, ref keys.
+    
+        Used by ParserOSM.parse().
     """
     if tags.get('highway', None) and tags['highway'].endswith('_link'):
         return tags.get('name', None), tags['highway'][:-5], tags.get('ref', None)
     
     return tags.get('name', None), tags.get('highway', None), tags.get('ref', None)
 
-def parse_route_relations(input):
-    """
-    """
-    rels, ways, nodes = ParserOSM().parse(input, way_key=name_highway_ref_key)
+def parse_street_waynodes(input):
+    """ Parse OSM XML input, return ways and nodes for waynode_networks().
     
-    for (id, rel) in rels.items():
-        for (index, part) in enumerate(rel['parts']):
-            if part.startswith('rel:') and part[4:] not in rels:
-                rel['parts'][index] = None
-        
-        rel['parts'] = filter(None, rel['parts'])
+        Uses name_highway_key() for way keys, ignores relations.
+    """
+    rels, ways, nodes = ParserOSM().parse(input, way_key=name_highway_key)
+    
+    return ways, nodes
+
+def parse_route_relation_waynodes(input):
+    """ Parse OSM XML input, return ways and nodes for waynode_networks().
+    
+        Uses network_ref_key() for relation keys, converts way keys to fit.
+
+        Assumes correctly-tagged route relations:
+            http://wiki.openstreetmap.org/wiki/Relation:route
+    """
+    rels, ways, nodes = ParserOSM().parse(input, way_key=name_highway_ref_key, rel_key=network_ref_key)
     
     #
     # Collapse subrelations to surface ways.
@@ -131,7 +140,7 @@ class ParserOSM:
         self.p.EndElementHandler = self.end_element
         #self.p.CharacterDataHandler = char_data
     
-    def parse(self, input, way_key=name_highway_key, rel_key=network_ref_key):
+    def parse(self, input, way_key=lambda tags: None, rel_key=lambda tags: None):
         """ Given a file-like stream of OSM XML data, return dictionaries of ways and nodes.
         
             Keys are generated from way tags based on the way_key and ref_key arguments.
