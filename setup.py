@@ -12,6 +12,6 @@ setup(name='Skeletron',
       url='https://github.com/migurski/Skeletron',
       requires=['networkx'],
       packages=['Skeletron'],
-      scripts=['skeletron-osm-keys-list.py', 'skeletron-osm-motorways.py', 'skeletron-osm-streets.py'],
+      scripts=['skeletron-osm-route-rels.py', 'skeletron-osm-streets.py'],
     # download_url='https://github.com/downloads/migurski' % locals(),
       license='BSD')
