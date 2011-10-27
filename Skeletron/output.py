@@ -1,6 +1,6 @@
 from sys import stderr
 
-from shapely.geometry import MultiLineString
+from shapely.geometry import LineString
 
 from . import multiline_centerline, mercator
 
@@ -17,10 +17,11 @@ def multilines_geojson(multilines, key_properties, buffer, density, min_length, 
         if not centerline:
             continue
         
-        coords = [[mercator(*point, inverse=True) for point in geom.coords] for geom in centerline.geoms]
-        geometry = MultiLineString(coords).__geo_interface__
-        
-        feature = dict(geometry=geometry, properties=key_properties(key))
-        geojson['features'].append(feature)
+        for geom in centerline.geoms:
+            coords = [mercator(*point, inverse=True) for point in geom.coords]
+            geometry = LineString(coords).__geo_interface__
+            feature = dict(geometry=geometry, properties=key_properties(key))
+
+            geojson['features'].append(feature)
 
     return geojson
