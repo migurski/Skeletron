@@ -6,10 +6,9 @@ from re import compile
 from json import dump
 from math import pi
 
-from shapely.geometry import MultiLineString
-
-from Skeletron import waynode_networks, networks_multilines, multiline_centerline, mercator
+from Skeletron import waynode_networks, networks_multilines
 from Skeletron.input import parse_route_relation_waynodes
+from Skeletron.output import multilines_geojson
 from Skeletron.util import open_file
 
 earth_radius = 6378137
@@ -48,26 +47,11 @@ if __name__ == '__main__':
     #
     
     kwargs = dict(buffer=buffer, density=buffer/2, min_length=2*buffer, min_area=(buffer**2)/4)
-    geojson = dict(type='FeatureCollection', features=[])
+    key_properties = lambda (network, ref, highway): dict(network=network, ref=ref, highway=highway)
 
     print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
     print >> stderr, '-' * 20
 
-    for (key, multiline) in sorted(multilines.items()):
-        print >> stderr, ', '.join(key), '...'
-        
-        centerline = multiline_centerline(multiline, **kwargs)
-        
-        if not centerline:
-            continue
-        
-        properties = dict(network=key[0], ref=key[1], highway=key[2])
-        
-        coords = [[mercator(*point, inverse=True) for point in geom.coords] for geom in centerline.geoms]
-        geometry = MultiLineString(coords).__geo_interface__
-        
-        feature = dict(geometry=geometry, properties=properties)
-        geojson['features'].append(feature)
-    
+    geojson = multilines_geojson(multilines, key_properties, **kwargs)
     output = open_file(output_file, 'w')
     dump(geojson, output)

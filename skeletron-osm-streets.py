@@ -6,17 +6,16 @@ from re import compile
 from json import dump
 from math import pi
 
-from shapely.geometry import MultiLineString
-
-from Skeletron import waynode_networks, networks_multilines, multiline_centerline, mercator
+from Skeletron import waynode_networks, networks_multilines
 from Skeletron.input import parse_street_waynodes
+from Skeletron.output import multilines_geojson
 from Skeletron.util import open_file
 
 earth_radius = 6378137
 
 optparser = OptionParser(usage="""%prog <osm input file> <geojson output file>""")
 
-defaults = dict(zoom=12, width=10)
+defaults = dict(zoom=12, width=10, use_highway=True)
 
 optparser.set_defaults(**defaults)
 
@@ -25,6 +24,9 @@ optparser.add_option('-z', '--zoom', dest='zoom',
 
 optparser.add_option('-w', '--width', dest='width',
                      type='float', help='Line width at zoom level. Default value is %s.' % repr(defaults['width']))
+
+optparser.add_option('--ignore-highway', dest='use_highway',
+                     action='store_false', help='Ignore differences between highway tags (e.g. collapse primary and secondary) when they share a name.')
 
 if __name__ == '__main__':
     
@@ -39,7 +41,7 @@ if __name__ == '__main__':
     
     input = open_file(input_file, 'r')
     
-    ways, nodes = parse_street_waynodes(input)
+    ways, nodes = parse_street_waynodes(input, options.use_highway)
     networks = waynode_networks(ways, nodes)
     multilines = networks_multilines(networks)
     
@@ -48,26 +50,15 @@ if __name__ == '__main__':
     #
     
     kwargs = dict(buffer=buffer, density=buffer/2, min_length=2*buffer, min_area=(buffer**2)/4)
-    geojson = dict(type='FeatureCollection', features=[])
+    
+    if options.use_highway:
+        key_properties = lambda (name, highway): dict(name=name, highway=highway)
+    else:
+        key_properties = lambda (name, ): dict(name=name)
 
     print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
     print >> stderr, '-' * 20
 
-    for (key, multiline) in sorted(multilines.items()):
-        print >> stderr, ', '.join(key), '...'
-        
-        centerline = multiline_centerline(multiline, **kwargs)
-        
-        if not centerline:
-            continue
-        
-        properties = dict(name=key[0], highway=key[1])
-        
-        coords = [[mercator(*point, inverse=True) for point in geom.coords] for geom in centerline.geoms]
-        geometry = MultiLineString(coords).__geo_interface__
-        
-        feature = dict(geometry=geometry, properties=properties)
-        geojson['features'].append(feature)
-    
+    geojson = multilines_geojson(multilines, key_properties, **kwargs)
     output = open_file(output_file, 'w')
     dump(geojson, output)
