@@ -1,6 +1,19 @@
 from copy import deepcopy
 from xml.parsers.expat import ParserCreate
 
+def name_key(tags):
+    """ Convert way tags to name keys.
+    
+        Used by ParserOSM.parse().
+    """
+    if 'name' not in tags:
+        return None
+    
+    if not tags['name']:
+        return None
+    
+    return (tags['name'], )
+
 def name_highway_key(tags):
     """ Convert way tags to name, highway keys.
     
@@ -43,12 +56,13 @@ def name_highway_ref_key(tags):
     
     return tags.get('name', None), tags.get('highway', None), tags.get('ref', None)
 
-def parse_street_waynodes(input):
+def parse_street_waynodes(input, use_highway):
     """ Parse OSM XML input, return ways and nodes for waynode_networks().
     
         Uses name_highway_key() for way keys, ignores relations.
     """
-    rels, ways, nodes = ParserOSM().parse(input, way_key=name_highway_key)
+    way_key = use_highway and name_highway_key or name_key
+    rels, ways, nodes = ParserOSM().parse(input, way_key=way_key)
     
     return ways, nodes
 
