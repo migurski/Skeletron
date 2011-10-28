@@ -66,7 +66,7 @@ def parse_street_waynodes(input, use_highway):
     
     return ways, nodes
 
-def parse_route_relation_waynodes(input):
+def parse_route_relation_waynodes(input, merge_highways):
     """ Parse OSM XML input, return ways and nodes for waynode_networks().
     
         Uses network_ref_key() for relation keys, converts way keys to fit.
@@ -123,6 +123,9 @@ def parse_route_relation_waynodes(input):
     
     rel_ways = dict()
     
+    highways = dict(motorway=9, trunk=8, primary=7, secondary=6, tertiary=5)
+    net_refs = dict()
+    
     for rel in rels.values():
         for part in rel['parts']:
             # we know from above that they're all "way:".
@@ -132,9 +135,40 @@ def parse_route_relation_waynodes(input):
             rel_way = deepcopy(ways[way_id])
             way_name, way_hwy, way_ref = rel_way['key']
             rel_net, rel_ref = rel['key']
-            rel_way['key'] = rel_net, rel_ref, way_hwy
+            
+            if merge_highways == 'yes':
+                rel_way['key'] = rel_net, rel_ref
+
+            elif merge_highways == 'largest':
+                rel_way['key'] = rel_net, rel_ref
+                big_hwy = net_refs.get((rel_net, rel_ref), None)
+                
+                if big_hwy is None or (highways.get(way_hwy, 0) > highways.get(big_hwy, 0)):
+                    #
+                    # Either we've not yet seen this network/ref combination or
+                    # the current highway value is larger than the previously
+                    # seen largest one. Make a note of it for later.
+                    #
+                    net_refs[(rel_net, rel_ref)] = way_hwy
+
+            else:
+                rel_way['key'] = rel_net, rel_ref, way_hwy
             
             rel_ways[len(rel_ways)] = rel_way
+    
+    print len(rel_ways), 'rel_ways', len(nodes), 'nodes'
+    
+    if merge_highways == 'largest':
+        #
+        # Run through the list again, assigning largest highway
+        # values from net_refs dictionary to each way key.
+        #
+        for (key, rel_way) in rel_ways.items():
+            network, ref = rel_way['key']
+            highway = net_refs[(network, ref)]
+            rel_ways[key]['key'] = network, ref, highway
+    
+    print len(rel_ways), 'rel_ways', len(nodes), 'nodes'
     
     return rel_ways, nodes
 
