@@ -177,7 +177,14 @@ def networks_multilines(networks):
 def multiline_polygon(multiline, buffer=20):
     """ Given a multilinestring, returns a buffered polygon.
     """
-    return multiline.buffer(buffer, 3)
+    #
+    # it seem like it should be possible to just use multiline.buffer(), no?
+    # in some cases, for some inputs, this resulted in an incomplete output
+    # for unknown reasons, so we'll buffer each part of the line separately
+    # and dissolve them together like peasants.
+    #
+    polys = [line.buffer(buffer, 3) for line in multiline.geoms]
+    return reduce(lambda a, b: a.union(b), polys)
 
 def polygon_skeleton(polygon, density=10):
     """ Given a buffer polygon, return a skeleton graph.
