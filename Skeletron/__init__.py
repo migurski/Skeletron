@@ -1,6 +1,8 @@
 from sys import stderr
 from subprocess import Popen, PIPE
 from itertools import combinations
+from tempfile import mkstemp
+from os import write, close
     
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon
 from pyproj import Proj
@@ -16,6 +18,8 @@ except ImportError:
 mercator = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over')
 
 from .util import simplify_line, densify_line, polygon_rings
+
+class QHullFailure (Exception): pass
 
 def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_area=100):
     """ Coalesce a linear street network to a centerline.
@@ -61,11 +65,22 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
     
     for ring in polygon_rings(multipoly):
         polygon = Polygon(ring)
-        skeleton = polygon_skeleton(polygon, density)
-        routes = skeleton_routes(skeleton, min_length)
-
-        points += sum(map(len, routes))
-        lines.extend([simplify_line(route, min_area) for route in routes])
+        
+        try:
+            skeleton = polygon_skeleton(polygon, density)
+        
+        except QHullFailure, e:
+            print >> stderr, '  QHull failure:', e
+            
+            handle, fname = mkstemp(dir='.', prefix='qhull-failure-', suffix='.txt')
+            write(handle, 'Error: %s\nDensity: %.6f\nPolygon: %s\n' % (e, density, str(polygon)))
+            close(handle)
+        
+        else:
+            routes = skeleton_routes(skeleton, min_length)
+    
+            points += sum(map(len, routes))
+            lines.extend([simplify_line(route, min_area) for route in routes])
     
     print >> stderr, ' ', points, 'centerline points reduced to', sum(map(len, lines)), 'final points.'
     
@@ -208,7 +223,7 @@ def polygon_skeleton(polygon, density=10):
     voronoi_lines = output.splitlines()
     
     if qvoronoi.returncode:
-        raise Exception('Failed with code %s' % qvoronoi.returncode)
+        raise QHullFailure('Failed with code %s' % qvoronoi.returncode)
     
     vert_count, poly_count = map(int, voronoi_lines[1].split()[:2])
     
