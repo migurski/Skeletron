@@ -49,7 +49,7 @@ if __name__ == '__main__':
     # Output
     #
     
-    kwargs = dict(buffer=buffer, density=buffer/2, min_length=2*buffer, min_area=(buffer**2)/4)
+    kwargs = dict(buffer=buffer, density=buffer/2, min_length=8*buffer, min_area=(buffer**2)/4)
     
     if options.merge_highways == 'yes':
         key_properties = lambda (network, ref): dict(network=network, ref=ref)
