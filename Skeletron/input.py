@@ -140,7 +140,7 @@ def parse_route_relation_waynodes(input, merge_highways):
                 rel_way['key'] = rel_net, rel_ref, rel_mod
 
             elif merge_highways == 'largest':
-                rel_way['key'] = rel_net, rel_ref, rel_mode
+                rel_way['key'] = rel_net, rel_ref, rel_mod
                 big_hwy = net_refs.get((rel_net, rel_ref), None)
                 
                 if big_hwy is None or (highways.get(way_hwy, 0) > highways.get(big_hwy, 0)):
@@ -165,7 +165,7 @@ def parse_route_relation_waynodes(input, merge_highways):
         #
         for (key, rel_way) in rel_ways.items():
             network, ref, modifier = rel_way['key']
-            highway = net_refs[(network, ref)]
+            highway = net_refs[(network, ref, modifier)]
             rel_ways[key]['key'] = network, ref, modifier, highway
     
     print len(rel_ways), 'rel_ways', len(nodes), 'nodes'
