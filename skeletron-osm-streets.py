@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+""" Run with "--help" flag for more information.
+
+Accepts OpenStreetMap XML input and generates GeoJSON output for streets
+using the "name" and "highway" tags to group collections of ways.
+"""
 
 from sys import argv, stdin, stderr, stdout
 from itertools import combinations
@@ -15,7 +20,10 @@ from Skeletron.util import open_file
 
 earth_radius = 6378137
 
-optparser = OptionParser(usage="""%prog <osm input file> <geojson output file>""")
+optparser = OptionParser(usage="""%prog [options] <osm input file> <geojson output file>
+
+Accepts OpenStreetMap XML input and generates GeoJSON output for streets
+using the "name" and "highway" tags to group collections of ways.""")
 
 defaults = dict(zoom=12, width=10, use_highway=True)
 

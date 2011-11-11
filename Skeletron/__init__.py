@@ -1,3 +1,32 @@
+""" Linework generalizer for use on maps.
+
+Skeletron generalizes collections of lines to a specific spherical mercator
+zoom level and pixel precision, using a polygon buffer and voronoi diagram as
+described in a 1996 paper by Alnoor Ladak and Roberto B. Martinez, "Automated
+Derivation of High Accuracy Road Centrelines Thiessen Polygons Technique"
+(http://proceedings.esri.com/library/userconf/proc96/TO400/PAP370/P370.HTM).
+
+Required dependencies:
+  - qhull binary (http://www.qhull.org)
+  - shapely (http://pypi.python.org/pypi/Shapely)
+  - pyproj (http://code.google.com/p/pyproj)
+  - networkx (http://networkx.lanl.gov)
+
+You'd typically use it via one of the provided utility scripts, currently
+just these two:
+
+skeletron-osm-streets.py
+
+  Accepts OpenStreetMap XML input and generates GeoJSON output for streets
+  using the "name" and "highway" tags to group collections of ways.
+
+skeletron-osm-route-rels.py
+
+  Accepts OpenStreetMap XML input and generates GeoJSON output for routes
+  using the "network", "ref" and "modifier" tags to group relations.
+  More on route relations: http://wiki.openstreetmap.org/wiki/Relation:route
+"""
+
 from sys import stderr
 from subprocess import Popen, PIPE
 from itertools import combinations
@@ -19,7 +48,7 @@ mercator = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.
 
 from .util import simplify_line_vw, simplify_line_dp, densify_line, polygon_rings
 
-class QHullFailure (Exception): pass
+class _QHullFailure (Exception): pass
 
 def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_area=100):
     """ Coalesce a linear street network to a centerline.
@@ -71,7 +100,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
         try:
             skeleton = polygon_skeleton(polygon, density)
         
-        except QHullFailure, e:
+        except _QHullFailure, e:
             print >> stderr, '  QHull failure:', e
             
             handle, fname = mkstemp(dir='.', prefix='qhull-failure-', suffix='.txt')
@@ -166,51 +195,6 @@ def waynode_multilines(ways, nodes):
     
     return multilines
 
-def waynode_networks(ways, nodes):
-    """ Return a dictionary of network graphs from dictionaries of ways and nodes.
-        
-        Each network graph node will have a "point" attribute with
-        the node's location projected to spherical mercator.
-    """
-    networks = dict()
-    
-    for way in ways.values():
-        key = way['key']
-        node_ids = way['nodes']
-        
-        if key not in networks:
-            networks[key] = Graph()
-        
-        edges = zip(node_ids[:-1], node_ids[1:])
-        
-        for (id_, _id) in edges:
-            point_ = Point(*mercator(*reversed(nodes[id_])))
-            _point = Point(*mercator(*reversed(nodes[_id])))
-        
-            networks[key].add_node(id_, dict(point=point_))
-            networks[key].add_node(_id, dict(point=_point))
-            networks[key].add_edge(id_, _id)
-    
-    return networks
-
-def networks_multilines(networks):
-    """ Converts dictionary of street line networks to dictionary of multilines.
-    """
-    multilines = dict()
-    
-    for (key, network) in networks.items():
-        routes = graph_routes(network, False)
-        
-        if routes:
-            print >> stderr, 'Found', key
-            multilines[key] = MultiLineString(routes)
-        
-        else:
-            print >> stderr, 'Ignored', key
-            continue
-        
-    return multilines
-
 def multiline_polygon(multiline, buffer=20):
     """ Given a multilinestring, returns a buffered polygon.
     """
@@ -245,7 +229,7 @@ def polygon_skeleton(polygon, density=10):
     voronoi_lines = output.splitlines()
     
     if qvoronoi.returncode:
-        raise QHullFailure('Failed with code %s' % qvoronoi.returncode)
+        raise _QHullFailure('Failed with code %s' % qvoronoi.returncode)
     
     vert_count, poly_count = map(int, voronoi_lines[1].split()[:2])
     
