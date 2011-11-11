@@ -26,8 +26,8 @@ class Canvas:
         xoff = left
         yoff = top
         
-        xscale = self.width / (right - left)
-        yscale = self.height / (bottom - top)
+        xscale = self.width / float(right - left)
+        yscale = self.height / float(bottom - top)
         
         if abs(xscale) > abs(yscale):
             xscale *= abs(yscale) / abs(xscale)
