@@ -63,9 +63,11 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
     
     lines, points = [], 0
     
-    for ring in polygon_rings(multipoly):
-        polygon = Polygon(ring)
-        
+    #
+    # Iterate over each constituent buffer polygon, extending the skeleton.
+    #
+    
+    for polygon in getattr(multipoly, 'geoms', [multipoly]):
         try:
             skeleton = polygon_skeleton(polygon, density)
         

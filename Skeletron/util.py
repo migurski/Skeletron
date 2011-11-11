@@ -68,6 +68,8 @@ def densify_line(points, distance):
 
 def polygon_rings(polygon):
     """ Given a buffer polygon, return a series of point rings.
+    
+        Return a list of interiors and exteriors all together.
     """
     if polygon.type == 'Polygon':
         return [polygon.exterior] + list(polygon.interiors)
