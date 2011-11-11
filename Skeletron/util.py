@@ -1,12 +1,12 @@
 from sys import stdin, stdout
-from math import hypot, ceil
+from math import hypot, ceil, sqrt
 from os.path import splitext
 from gzip import GzipFile
 from bz2 import BZ2File
 
 from shapely.geometry import Polygon
 
-def simplify_line(points, small_area=100):
+def simplify_line_vw(points, small_area=100):
     """ Simplify a line of points using V-W down to the given area.
     """
     while len(points) > 3:
@@ -46,6 +46,77 @@ def simplify_line(points, small_area=100):
         points = [point for (index, point) in enumerate(points) if index not in popped]
     
     return list(points)
+
+def simplify_line_dp(pts, tolerance):
+    """ Pure-Python Douglas-Peucker line simplification/generalization
+        
+        this code was written by Schuyler Erle <schuyler@nocat.net> and is
+          made available in the public domain.
+        
+        the code was ported from a freely-licensed example at
+          http://www.3dsoftware.com/Cartography/Programming/PolyLineReduction/
+        
+        the original page is no longer available, but is mirrored at
+          http://www.mappinghacks.com/code/PolyLineReduction/
+    """
+    anchor  = 0
+    floater = len(pts) - 1
+    stack   = []
+    keep    = set()
+
+    stack.append((anchor, floater))  
+    while stack:
+        anchor, floater = stack.pop()
+      
+        # initialize line segment
+        if pts[floater] != pts[anchor]:
+            anchorX = float(pts[floater][0] - pts[anchor][0])
+            anchorY = float(pts[floater][1] - pts[anchor][1])
+            seg_len = sqrt(anchorX ** 2 + anchorY ** 2)
+            # get the unit vector
+            anchorX /= seg_len
+            anchorY /= seg_len
+        else:
+            anchorX = anchorY = seg_len = 0.0
+    
+        # inner loop:
+        max_dist = 0.0
+        farthest = anchor + 1
+        for i in range(anchor + 1, floater):
+            dist_to_seg = 0.0
+            # compare to anchor
+            vecX = float(pts[i][0] - pts[anchor][0])
+            vecY = float(pts[i][1] - pts[anchor][1])
+            seg_len = sqrt( vecX ** 2 + vecY ** 2 )
+            # dot product:
+            proj = vecX * anchorX + vecY * anchorY
+            if proj < 0.0:
+                dist_to_seg = seg_len
+            else: 
+                # compare to floater
+                vecX = float(pts[i][0] - pts[floater][0])
+                vecY = float(pts[i][1] - pts[floater][1])
+                seg_len = sqrt( vecX ** 2 + vecY ** 2 )
+                # dot product:
+                proj = vecX * (-anchorX) + vecY * (-anchorY)
+                if proj < 0.0:
+                    dist_to_seg = seg_len
+                else:  # calculate perpendicular distance to line (pythagorean theorem):
+                    dist_to_seg = sqrt(abs(seg_len ** 2 - proj ** 2))
+                if max_dist < dist_to_seg:
+                    max_dist = dist_to_seg
+                    farthest = i
+
+        if max_dist <= tolerance: # use line segment
+            keep.add(anchor)
+            keep.add(floater)
+        else:
+            stack.append((anchor, farthest))
+            stack.append((farthest, floater))
+
+    keep = list(keep)
+    keep.sort()
+    return [pts[i] for i in keep]
 
 def densify_line(points, distance):
     """ Densify a line of points using the given distance.

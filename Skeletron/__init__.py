@@ -17,7 +17,7 @@ except ImportError:
 
 mercator = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over')
 
-from .util import simplify_line, densify_line, polygon_rings
+from .util import simplify_line_vw, simplify_line_dp, densify_line, polygon_rings
 
 class QHullFailure (Exception): pass
 
@@ -42,7 +42,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
         
           min_area
             Minimum area of roads kinks for them to be maintained through
-            generalization by util.simplify_line(), should be approximately
+            generalization by util.simplify_line_vw(), should be approximately
             one quarter of buffer squared.
     """
     if not multiline:
@@ -53,7 +53,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
 
     print >> stderr, ' ', len(geoms), 'linear parts with', sum(counts), 'points',
     
-    geoms = [simplify_line(list(geom.coords), min_area) for geom in geoms]
+    geoms = [simplify_line_dp(list(geom.coords), buffer) for geom in geoms]
     counts = [len(geom) for geom in geoms]
 
     print >> stderr, 'reduced to', sum(counts), 'points.'
@@ -82,7 +82,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
             routes = skeleton_routes(skeleton, min_length)
     
             points += sum(map(len, routes))
-            lines.extend([simplify_line(route, min_area) for route in routes])
+            lines.extend([simplify_line_vw(route, min_area) for route in routes])
     
     print >> stderr, ' ', points, 'centerline points reduced to', sum(map(len, lines)), 'final points.'
     
@@ -145,6 +145,26 @@ def graph_routes(graph, find_longest):
             break
     
     return routes
+
+def waynode_multilines(ways, nodes):
+    """ Convert dictionaries of ways and nodes to dictionary of multilines.
+    """
+    multilines = dict()
+    
+    for way in ways.values():
+        key = way['key']
+        node_ids = way['nodes']
+        
+        if key not in multilines:
+            multilines[key] = []
+        
+        points = [mercator(*reversed(nodes[id])) for id in node_ids]
+        multilines[key].append(LineString(points))
+    
+    for (key, lines) in multilines.items():
+        multilines[key] = MultiLineString(lines)
+    
+    return multilines
 
 def waynode_networks(ways, nodes):
     """ Return a dictionary of network graphs from dictionaries of ways and nodes.

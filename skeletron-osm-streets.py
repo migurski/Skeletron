@@ -8,7 +8,7 @@ from re import compile
 from json import dump
 from math import pi
 
-from Skeletron import waynode_networks, networks_multilines
+from Skeletron import waynode_multilines
 from Skeletron.input import parse_street_waynodes
 from Skeletron.output import multilines_geojson
 from Skeletron.util import open_file
@@ -44,8 +44,7 @@ if __name__ == '__main__':
     input = open_file(input_file, 'r')
     
     ways, nodes = parse_street_waynodes(input, options.use_highway)
-    networks = waynode_networks(ways, nodes)
-    multilines = networks_multilines(networks)
+    multilines = waynode_multilines(ways, nodes)
     
     #
     # Output
