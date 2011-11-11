@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from sys import argv, stdin, stderr, stdout
 from itertools import combinations
 from optparse import OptionParser
