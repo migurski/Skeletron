@@ -53,11 +53,12 @@ if __name__ == '__main__':
     
     if options.merge_highways == 'yes':
         def key_properties((network, ref, modifier)):
-            return dict(network=network, ref=ref, modifier=modifier)
-
+            return dict(network=network, ref=ref, modifier=modifier,
+                        zoomlevel=options.zoom, pixelwidth=options.width)
     else:
         def key_properties((network, ref, modifier, highway)):
-            return dict(network=network, ref=ref, modifier=modifier, highway=highway)
+            return dict(network=network, ref=ref, modifier=modifier, highway=highway,
+                        zoomlevel=options.zoom, pixelwidth=options.width)
 
     print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
     print >> stderr, '-' * 20

@@ -52,9 +52,13 @@ if __name__ == '__main__':
     kwargs = dict(buffer=buffer, density=buffer/2, min_length=2*buffer, min_area=(buffer**2)/4)
     
     if options.use_highway:
-        key_properties = lambda (name, highway): dict(name=name, highway=highway)
+        def key_properties((name, highway)):
+            return dict(name=name, highway=highway,
+                        zoomlevel=options.zoom, pixelwidth=options.width)
     else:
-        key_properties = lambda (name, ): dict(name=name)
+        def key_properties((name, )):
+            return dict(name=name,
+                        zoomlevel=options.zoom, pixelwidth=options.width)
 
     print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
     print >> stderr, '-' * 20
