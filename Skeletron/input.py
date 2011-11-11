@@ -30,7 +30,7 @@ def name_highway_key(tags):
     
     return tags['name'], tags['highway']
 
-def network_ref_key(tags):
+def network_ref_modifier_key(tags):
     """ Convert relation tags to network, ref keys.
     
         Used by ParserOSM.parse().
@@ -44,7 +44,7 @@ def network_ref_key(tags):
     if not tags['network'] or not tags['ref']:
         return None
     
-    return tags['network'], tags['ref']
+    return tags['network'], tags['ref'], tags.get('modifier', '')
 
 def name_highway_ref_key(tags):
     """ Convert way tags to name, highway, ref keys.
@@ -69,12 +69,12 @@ def parse_street_waynodes(input, use_highway):
 def parse_route_relation_waynodes(input, merge_highways):
     """ Parse OSM XML input, return ways and nodes for waynode_networks().
     
-        Uses network_ref_key() for relation keys, converts way keys to fit.
+        Uses network_ref_modifier_key() for relation keys, converts way keys to fit.
 
         Assumes correctly-tagged route relations:
             http://wiki.openstreetmap.org/wiki/Relation:route
     """
-    rels, ways, nodes = ParserOSM().parse(input, way_key=name_highway_ref_key, rel_key=network_ref_key)
+    rels, ways, nodes = ParserOSM().parse(input, way_key=name_highway_ref_key, rel_key=network_ref_modifier_key)
     
     #
     # Collapse subrelations to surface ways.
@@ -134,13 +134,13 @@ def parse_route_relation_waynodes(input, merge_highways):
             # add the route relation key to the way
             rel_way = deepcopy(ways[way_id])
             way_name, way_hwy, way_ref = rel_way['key']
-            rel_net, rel_ref = rel['key']
+            rel_net, rel_ref, rel_mod = rel['key']
             
             if merge_highways == 'yes':
-                rel_way['key'] = rel_net, rel_ref
+                rel_way['key'] = rel_net, rel_ref, rel_mod
 
             elif merge_highways == 'largest':
-                rel_way['key'] = rel_net, rel_ref
+                rel_way['key'] = rel_net, rel_ref, rel_mode
                 big_hwy = net_refs.get((rel_net, rel_ref), None)
                 
                 if big_hwy is None or (highways.get(way_hwy, 0) > highways.get(big_hwy, 0)):
@@ -149,10 +149,10 @@ def parse_route_relation_waynodes(input, merge_highways):
                     # the current highway value is larger than the previously
                     # seen largest one. Make a note of it for later.
                     #
-                    net_refs[(rel_net, rel_ref)] = way_hwy
+                    net_refs[(rel_net, rel_ref, rel_mod)] = way_hwy
 
             else:
-                rel_way['key'] = rel_net, rel_ref, way_hwy
+                rel_way['key'] = rel_net, rel_ref, rel_mod, way_hwy
             
             rel_ways[len(rel_ways)] = rel_way
     
@@ -164,9 +164,9 @@ def parse_route_relation_waynodes(input, merge_highways):
         # values from net_refs dictionary to each way key.
         #
         for (key, rel_way) in rel_ways.items():
-            network, ref = rel_way['key']
+            network, ref, modifier = rel_way['key']
             highway = net_refs[(network, ref)]
-            rel_ways[key]['key'] = network, ref, highway
+            rel_ways[key]['key'] = network, ref, modifier, highway
     
     print len(rel_ways), 'rel_ways', len(nodes), 'nodes'
     

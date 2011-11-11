@@ -15,7 +15,7 @@ earth_radius = 6378137
 
 optparser = OptionParser(usage="""%prog <osm input file> <geojson output file>""")
 
-defaults = dict(zoom=12, width=10, merge_highways='no')
+defaults = dict(zoom=12, width=15, merge_highways='no')
 
 optparser.set_defaults(**defaults)
 
@@ -52,9 +52,12 @@ if __name__ == '__main__':
     kwargs = dict(buffer=buffer, density=buffer/2, min_length=8*buffer, min_area=(buffer**2)/4)
     
     if options.merge_highways == 'yes':
-        key_properties = lambda (network, ref): dict(network=network, ref=ref)
+        def key_properties((network, ref, modifier)):
+            return dict(network=network, ref=ref, modifier=modifier)
+
     else:
-        key_properties = lambda (network, ref, highway): dict(network=network, ref=ref, highway=highway)
+        def key_properties((network, ref, modifier, highway)):
+            return dict(network=network, ref=ref, modifier=modifier, highway=highway)
 
     print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
     print >> stderr, '-' * 20
