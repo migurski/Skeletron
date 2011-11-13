@@ -184,6 +184,9 @@ def waynode_multilines(ways, nodes):
         key = way['key']
         node_ids = way['nodes']
         
+        if len(node_ids) < 2:
+            continue
+        
         if key not in multilines:
             multilines[key] = []
         
