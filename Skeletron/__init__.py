@@ -32,6 +32,9 @@ from subprocess import Popen, PIPE
 from itertools import combinations
 from tempfile import mkstemp
 from os import write, close
+from math import ceil
+from time import time
+import signal
     
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon
 from pyproj import Proj
@@ -49,6 +52,11 @@ mercator = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.
 from .util import simplify_line_vw, simplify_line_dp, densify_line, polygon_rings
 
 class _QHullFailure (Exception): pass
+class _SignalAlarm (Exception): pass
+
+class _GraphRoutesOvertime (Exception):
+    def __init__(self, graph):
+        self.graph = graph
 
 def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_area=100):
     """ Coalesce a linear street network to a centerline.
@@ -101,17 +109,26 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
             skeleton = polygon_skeleton(polygon, density)
         
         except _QHullFailure, e:
-            print >> stderr, '  QHull failure:', e
+            #
+            # QHull failures here are usually signs of tiny geometries,
+            # so they are usually fine to ignore completely and move on.
+            #
+            print >> stderr, ' -QHull failure:', e
             
             handle, fname = mkstemp(dir='.', prefix='qhull-failure-', suffix='.txt')
             write(handle, 'Error: %s\nDensity: %.6f\nPolygon: %s\n' % (e, density, str(polygon)))
             close(handle)
+            continue
         
-        else:
+        try:
             routes = skeleton_routes(skeleton, min_length)
-    
-            points += sum(map(len, routes))
-            lines.extend([simplify_line_vw(route, min_area) for route in routes])
+
+        except _SignalAlarm, e:
+            # An alarm signal here means that graph_routes() went overtime.
+            raise _GraphRoutesOvertime(skeleton)
+        
+        points += sum(map(len, routes))
+        lines.extend([simplify_line_vw(route, min_area) for route in routes])
     
     print >> stderr, ' ', points, 'centerline points reduced to', sum(map(len, lines)), 'final points.'
     
@@ -120,13 +137,49 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
     
     return MultiLineString(lines)
 
-def graph_routes(graph, find_longest):
+def _graph_routes_took_too_long(signum, frame):
+    if signum == signal.SIGALRM:
+        raise _SignalAlarm()
+    else:
+        raise Exception("Unexpected signal: %s" % signum)
+
+def graph_routes(graph, find_longest, time_coefficient=0.02):
     """ Return a list of routes through a network as (x, y) pair lists, with no edge repeated.
     
         Each node in the graph must have a "point" attribute with a Point object.
+        
+        The time_coefficient argument helps determine a time limit after which
+        this function is killed off by means of a SIGALRM.
+
+        The default value of 0.02 comes from a graph of times for a single
+        state's generalized routes at a few zoom levels. I found that this
+        function typically runs in O(n) time best case with some spikes up
+        to O(n^2) and a general cluster around O(n^1.32). Introducing a time
+        limit based on O(n^2) seemed too generous for large graphs, while
+        the coefficient 0.02 seemed to comfortably cover graphs with up to
+        tens of thousands of nodes.
+        
+        In the graph (new-hampshire-times.png) the functions are:
+        - X-axis: graph size in nodes
+        - Y-axis: compute time in seconds
+        - Orange dashed good-enough limit: y = 0.02x
+        - Blue bottom limit: y = 0.00005x
+        - Green trend line: y = 2.772e-5x^1.3176
+        - Black upper bounds: y = 0.000001x^2
     """
+    #
+    # Before we do anything else, set a time limit to deal with the occasional
+    # halting problem on larger graphs. Using signals here seems safe because
+    # Skeletron is intended to be used in single-threaded processes.
+    #
+    time_limit = int(ceil(time_coefficient * graph.number_of_nodes()))
+    signal.signal(signal.SIGALRM, _graph_routes_took_too_long)
+    signal.alarm(time_limit)
+    
     # it's destructive
     _graph = graph.copy()
+    
+    start_nodes, start_time = _graph.number_of_nodes(), time()
     
     # passed directly to shortest_path()
     weight = find_longest and 'length' or None
@@ -173,6 +226,9 @@ def graph_routes(graph, find_longest):
             # move on to the next possible route
             break
     
+    signal.alarm(0)
+    print >> open('graph-routes-log.txt', 'a'), start_nodes, (time() - start_time)
+
     return routes
 
 def waynode_multilines(ways, nodes):

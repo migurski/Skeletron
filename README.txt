@@ -9,9 +9,9 @@ Derivation of High Accuracy Road Centrelines Thiessen Polygons Technique"
 
 Required dependencies:
   - qhull binary (http://www.qhull.org)
-  - shapely (http://pypi.python.org/pypi/Shapely)
+  - shapely 1.2+ (http://pypi.python.org/pypi/Shapely)
   - pyproj (http://code.google.com/p/pyproj)
-  - networkx (http://networkx.lanl.gov)
+  - networkx 1.5+ (http://networkx.lanl.gov)
 
 You'd typically use it via one of the provided utility scripts, currently
 just these two:

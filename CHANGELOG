@@ -1,0 +1,2 @@
+2011-11-27: 0.4.0
+- Added dependency on Unix-only signal library to cut short graph_routes() when it can't it won't and it don't stop.
