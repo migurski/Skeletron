@@ -1,8 +1,11 @@
 from sys import stderr
+from pickle import dumps as pickleit
+from tempfile import mkstemp
+from os import write, close
 
 from shapely.geometry import LineString
 
-from . import multiline_centerline, mercator
+from . import multiline_centerline, mercator, _GraphRoutesOvertime
 
 def multilines_geojson(multilines, key_properties, buffer, density, min_length, min_area):
     """
@@ -12,7 +15,21 @@ def multilines_geojson(multilines, key_properties, buffer, density, min_length, 
     for (key, multiline) in sorted(multilines.items()):
         print >> stderr, ', '.join(key), '...'
         
-        centerline = multiline_centerline(multiline, buffer, density, min_length, min_area)
+        try:
+            centerline = multiline_centerline(multiline, buffer, density, min_length, min_area)
+        
+        except _GraphRoutesOvertime, e:
+            #
+            # Catch overtimes here because they seem to affect larger networks
+            # and therefore most or all of a complex multiline. We'll keep the
+            # key and a pickled copy of the offending graph.
+            #
+            print >> stderr, ' -Graph routes went overtime.'
+            
+            handle, fname = mkstemp(dir='.', prefix='graph-overtime-', suffix='.txt')
+            write(handle, repr(key) + '\n' + pickleit(e.graph))
+            close(handle)
+            continue
         
         if not centerline:
             continue
