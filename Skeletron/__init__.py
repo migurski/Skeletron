@@ -143,17 +143,36 @@ def _graph_routes_took_too_long(signum, frame):
     else:
         raise Exception("Unexpected signal: %s" % signum)
 
-def graph_routes(graph, find_longest):
+def graph_routes(graph, find_longest, time_coefficient=0.02):
     """ Return a list of routes through a network as (x, y) pair lists, with no edge repeated.
     
         Each node in the graph must have a "point" attribute with a Point object.
+        
+        The time_coefficient argument helps determine a time limit after which
+        this function is killed off by means of a SIGALRM.
+
+        The default value of 0.02 comes from a graph of times for a single
+        state's generalized routes at a few zoom levels. I found that this
+        function typically runs in O(n) time best case with some spikes up
+        to O(n^2) and a general cluster around O(n^1.32). Introducing a time
+        limit based on O(n^2) seemed too generous for large graphs, while
+        the coefficient 0.02 seemed to comfortably cover graphs with up to
+        tens of thousands of nodes.
+        
+        In the graph (new-hampshire-times.png) the functions are:
+        - X-axis: graph size in nodes
+        - Y-axis: compute time in seconds
+        - Orange dashed good-enough limit: y = 0.02x
+        - Blue bottom limit: y = 0.00005x
+        - Green trend line: y = 2.772e-5x^1.3176
+        - Black upper bounds: y = 0.000001x^2
     """
     #
     # Before we do anything else, set a time limit to deal with the occasional
     # halting problem on larger graphs. Using signals here seems safe because
     # Skeletron is intended to be used in single-threaded processes.
     #
-    time_limit = int(ceil(0.02 * graph.number_of_nodes()))
+    time_limit = int(ceil(time_coefficient * graph.number_of_nodes()))
     signal.signal(signal.SIGALRM, _graph_routes_took_too_long)
     signal.alarm(time_limit)
     
