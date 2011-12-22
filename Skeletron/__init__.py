@@ -250,6 +250,7 @@ def waynode_multilines(ways, nodes):
         multilines[key].append(LineString(points))
     
     for (key, lines) in multilines.items():
+        lines = [list(line.coords) for line in lines]
         multilines[key] = MultiLineString(lines)
     
     return multilines
