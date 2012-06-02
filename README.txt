@@ -12,6 +12,7 @@ Required dependencies:
   - shapely 1.2+ (http://pypi.python.org/pypi/Shapely)
   - pyproj (http://code.google.com/p/pyproj)
   - networkx 1.5+ (http://networkx.lanl.gov)
+  - StreetNames 0.1+ (https://github.com/nvkelso/map-label-style-manual/tree/master/tools/street_names)
 
 You'd typically use it via one of the provided utility scripts, currently
 just these two:

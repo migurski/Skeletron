@@ -13,6 +13,8 @@ from re import compile
 from json import dump
 from math import pi
 
+from StreetNames import short_street_name
+
 from Skeletron import waynode_multilines
 from Skeletron.input import parse_street_waynodes
 from Skeletron.output import multilines_geojson
@@ -63,11 +65,13 @@ if __name__ == '__main__':
     if options.use_highway:
         def key_properties((name, highway)):
             return dict(name=name, highway=highway,
-                        zoomlevel=options.zoom, pixelwidth=options.width)
+                        zoomlevel=options.zoom, pixelwidth=options.width,
+                        shortname=short_street_name(name))
     else:
         def key_properties((name, )):
             return dict(name=name,
-                        zoomlevel=options.zoom, pixelwidth=options.width)
+                        zoomlevel=options.zoom, pixelwidth=options.width,
+                        shortname=short_street_name(name))
 
     print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
     print >> stderr, '-' * 20
