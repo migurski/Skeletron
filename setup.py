@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
 from distutils.core import setup
-
-version = open('VERSION', 'r').read().strip()
+from Skeletron import __version__
 
 setup(name='Skeletron',
-      version=version,
+      version=__version__,
       description='Generalizes collections of lines on maps to simpler lines for improved labeling.',
       author='Michal Migurski',
       author_email='mike@stamen.com',
