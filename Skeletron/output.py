@@ -13,7 +13,7 @@ def multilines_geojson(multilines, key_properties, buffer, density, min_length, 
     geojson = dict(type='FeatureCollection', features=[])
 
     for (key, multiline) in sorted(multilines.items()):
-        print >> stderr, ', '.join(key), '...'
+        print >> stderr, ', '.join(key).encode('ascii', 'ignore'), '...'
         
         try:
             centerline = multiline_centerline(multiline, buffer, density, min_length, min_area)

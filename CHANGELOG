@@ -1,3 +1,6 @@
+2012-09-25: 0.5.1
+- Fixed encoding trap in Skeletron.output.
+
 2012-06-01: 0.5.0
 - Added dependency on StreetNames 0.1+ in skeletron-osm-streets.py.
 
