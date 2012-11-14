@@ -14,7 +14,7 @@ def write_groups(queue):
     
     while True:
         try:
-            group = queue.get(timeout=30)
+            group = queue.get(timeout=5)
         except:
             print 'bah'
             break
@@ -50,6 +50,11 @@ def get_relations_list(db):
         # Skip rail crap
         if tags.get('route', '') in ('bus', 'tram', 'train', 'subway'):
             continue
+        
+        # Just the 80's for now.
+        if tags.get('network', '') not in ('US:I', ): continue
+        if not tags.get('ref', '').endswith('80'): continue
+        if len(tags.get('ref', '')) < 3: continue
         
         relations.append((id, tags))
     
@@ -184,6 +189,19 @@ def gen_relation_groups(relations):
         way_lines = [get_way_linestring(db, way_id) for way_id in way_ids]
         rel_coords = sum([len(line.coords) for line in way_lines if line])
         #multiline = cascaded_union(way_lines)
+        
+        if rel_coords > 1000:
+            from operator import add
+            points = reduce(add, [list(line.coords) for line in way_lines if line])
+            
+            import numpy, math
+            
+            # cribbed from http://stackoverflow.com/questions/7059841/estimating-aspect-ratio-of-a-convex-hull
+            xy = numpy.vstack(points).T
+            eigvals, eigvecs = numpy.linalg.eig(numpy.cov(xy))
+            
+            print xy.shape, eigvals,
+            print sorted([(val, 180 * math.atan2(y, x) / math.pi) for (val, (x, y)) in zip(eigvals, eigvecs.T)], reverse=True)[0][1], 'degrees'
         
         print >> stderr, ', '.join(key), '--', rel_coords, 'nodes'
         
