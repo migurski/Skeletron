@@ -14,7 +14,7 @@ def write_groups(queue):
     
     while True:
         try:
-            group = queue.get(timeout=5)
+            group = queue.get(timeout=30)
         except:
             print 'bah'
             break
@@ -120,16 +120,31 @@ def get_way_tags(db, way_id):
 def get_way_linestring(db, way_id):
     '''
     '''
-    db.execute('''SELECT (n.lon * 0.0000001)::float AS lon,
-                         (n.lat * 0.0000001)::float AS lat
+    db.execute('SELECT SRID(way) FROM planet_osm_point LIMIT 1')
+    
+    (srid, ) = db.fetchone()
+    
+    if srid not in (4326, 900913):
+        raise Exception('Unknown SRID %d' % srid)
+    
+    db.execute('''SELECT X(location) AS lon, Y(location) AS lat
                   FROM (
-                    SELECT unnest(nodes)::int AS id
-                    FROM planet_osm_ways
-                    WHERE id = %d
-                  ) AS w,
-                  planet_osm_nodes AS n
-                  WHERE n.id = w.id''' \
-                % way_id)
+                    SELECT
+                      CASE
+                      WHEN %s = 900913
+                      THEN Transform(SetSRID(MakePoint(n.lon * 0.01, n.lat * 0.01), 900913), 4326)
+                      WHEN %s = 4326
+                      THEN MakePoint(n.lon * 0.0000001, n.lat * 0.0000001)
+                      END AS location
+                    FROM (
+                      SELECT unnest(nodes)::int AS id
+                      FROM planet_osm_ways
+                      WHERE id = %d
+                    ) AS w,
+                    planet_osm_nodes AS n
+                    WHERE n.id = w.id
+                  ) AS points''' \
+                % (srid, srid, way_id))
     
     coords = db.fetchall()
     
@@ -202,6 +217,7 @@ def gen_relation_groups(relations):
             
             print xy.shape, eigvals,
             print sorted([(val, 180 * math.atan2(y, x) / math.pi) for (val, (x, y)) in zip(eigvals, eigvecs.T)], reverse=True)[0][1], 'degrees'
+            print tags
         
         print >> stderr, ', '.join(key), '--', rel_coords, 'nodes'
         
