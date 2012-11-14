@@ -29,7 +29,7 @@ def get_relations_list(db):
     '''
     '''
     db.execute('''SELECT id, tags
-                  FROM route_rels_rels
+                  FROM planet_osm_rels
                   WHERE 'network' = ANY(tags)
                     AND 'ref' = ANY(tags)
                   ''')
@@ -40,11 +40,11 @@ def get_relations_list(db):
         tags = dict([keyval for keyval in zip(tags[0::2], tags[1::2])])
         
         # Skip bike crap
-        if tags['network'] in ('lcn', 'rcn', 'ncn', 'icn', 'mtb'):
+        if tags.get('network', '') in ('lcn', 'rcn', 'ncn', 'icn', 'mtb'):
             continue
         
         # Skip walking crap
-        if tags['network'] in ('lwn', 'rwn', 'nwn', 'iwn'):
+        if tags.get('network', '') in ('lwn', 'rwn', 'nwn', 'iwn'):
             continue
 
         # Skip rail crap
@@ -71,7 +71,7 @@ def get_relation_ways(db, rel_id):
         rels_seen.add(rel_id)
         
         db.execute('''SELECT members
-                      FROM route_rels_rels
+                      FROM planet_osm_rels
                       WHERE id = %d''' \
                     % rel_id)
         
@@ -98,7 +98,7 @@ def get_way_tags(db, way_id):
     '''
     '''
     db.execute('''SELECT tags
-                  FROM route_rels_ways
+                  FROM planet_osm_ways
                   WHERE id = %d''' \
                 % way_id)
     
@@ -119,10 +119,10 @@ def get_way_linestring(db, way_id):
                          (n.lat * 0.0000001)::float AS lat
                   FROM (
                     SELECT unnest(nodes)::int AS id
-                    FROM route_rels_ways
+                    FROM planet_osm_ways
                     WHERE id = %d
                   ) AS w,
-                  route_rels_nodes AS n
+                  planet_osm_nodes AS n
                   WHERE n.id = w.id''' \
                 % way_id)
     
@@ -238,7 +238,7 @@ if __name__ == '__main__':
     group_writer = Process(target=write_groups, args=(queue, ))
     group_writer.start()
     
-    db = connect(user='osm', database='planet_osm').cursor()
+    db = connect(host='localhost', user='gis', database='gis', password='gis').cursor()
     
     relations = get_relations_list(db)
     
