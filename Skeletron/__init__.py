@@ -33,7 +33,8 @@ from subprocess import Popen, PIPE
 from itertools import combinations
 from tempfile import mkstemp
 from os import write, close
-from math import ceil
+from math import sin, cos, pi
+from math import ceil, atan2
 from time import time
 import signal
     
@@ -271,7 +272,6 @@ def multiline_polygon(multiline, buffer=20):
 def polygon_skeleton(polygon, density=10):
     """ Given a buffer polygon, return a skeleton graph.
     """
-    skeleton = Graph()
     points = []
     
     for ring in polygon_rings(polygon):
@@ -279,8 +279,48 @@ def polygon_skeleton(polygon, density=10):
     
     if len(points) <= 4:
         # don't bother with this one
-        return skeleton
+        return Graph()
     
+    points_major_axis(points)
+
+    return polygon_dots_skeleton(polygon, points)
+
+def points_major_axis(points):
+    ''' Mess around with the major axis of a list of (x, y) tuples.
+    '''
+    # cribbed from http://stackoverflow.com/questions/7059841/estimating-aspect-ratio-of-a-convex-hull
+    import numpy, numpy.linalg
+
+    xys = numpy.vstack(points).T
+    xcenter, ycenter = (xys / len(points)).sum(1)
+
+    eigvals, eigvecs = numpy.linalg.eig(numpy.cov(xys))
+    
+    (x, y) = sorted(zip(eigvals, eigvecs.T))[-1][1]
+    theta = atan2(y, x)
+    
+    translate = numpy.vstack([(xcenter, ycenter)] * len(points)).T
+    rotate = numpy.array([[cos(theta), sin(theta)], [-sin(theta), cos(theta)]])
+    unrotate = numpy.array([[cos(-theta), sin(-theta)], [-sin(-theta), cos(-theta)]])
+    
+    xys = numpy.dot(rotate, xys - translate)
+
+    #
+    # Now, xys is an array of points with the center at (0, 0)
+    # and rotated so that the major axis is horizonal.
+    #
+    width, height = xys.max(1) - xys.min(1)
+    assert width > height
+    
+    xys = numpy.dot(unrotate, xys) + translate
+    
+    print >> stderr, '  %.1f degrees at %d, %d' % (180 * theta / pi, xcenter, ycenter)
+
+def polygon_dots_skeleton(polygon, points):
+    '''
+    '''
+    skeleton = Graph()
+
     print >> stderr, ' ', len(points), 'perimeter points',
     
     rbox = '\n'.join( ['2', str(len(points))] + ['%.2f %.2f' % (x, y) for (x, y) in points] + [''] )
