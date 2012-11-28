@@ -1,3 +1,6 @@
+2012-11-27: 0.6.0
+- Made skeleton-finding for very long routes more efficient through divide and conquer approach.
+
 2012-09-25: 0.5.1
 - Fixed encoding trap in Skeletron.output.
 
