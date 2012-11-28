@@ -26,7 +26,7 @@ skeletron-osm-route-rels.py
   using the "network", "ref" and "modifier" tags to group relations.
   More on route relations: http://wiki.openstreetmap.org/wiki/Relation:route
 """
-__version__ = '0.5.1'
+__version__ = '0.6.0'
 
 from subprocess import Popen, PIPE
 from itertools import combinations
@@ -151,7 +151,9 @@ def graph_routes(graph, find_longest, time_coefficient=0.02):
         Each node in the graph must have a "point" attribute with a Point object.
         
         The time_coefficient argument helps determine a time limit after which
-        this function is killed off by means of a SIGALRM.
+        this function is killed off by means of a SIGALRM. With the addition of
+        divide_points() in polygon_skeleton_graphs() as of version 0.6.0, this
+        condition is much less likely to actually happen.
 
         The default value of 0.02 comes from a graph of times for a single
         state's generalized routes at a few zoom levels. I found that this
