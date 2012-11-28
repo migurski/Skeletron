@@ -38,6 +38,7 @@ from math import ceil, atan2
 from time import time
 import signal
     
+import numpy, numpy.linalg
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon
 from pyproj import Proj
 
@@ -311,24 +312,26 @@ def polygon_skeleton_graphs(polygon, density=10):
 
 def divide_points(points):
     ''' Divide a list of (x, y) tuples along their major axis, return two lists.
+    
+        Use eigenvectors to determine the major axis and split on that axis,
+        at the center (average) of the input point collection.
+        
+        Eigenbusiness cribbed from
+        http://stackoverflow.com/questions/7059841/estimating-aspect-ratio-of-a-convex-hull
     '''
-    # cribbed from http://stackoverflow.com/questions/7059841/estimating-aspect-ratio-of-a-convex-hull
-    import numpy, numpy.linalg
-
+    # Make an array of points and find its average.
     xys = numpy.vstack(points).T
     xcenter, ycenter = (xys / len(points)).sum(1)
 
+    # Calculate angle of major axis.
     eigvals, eigvecs = numpy.linalg.eig(numpy.cov(xys))
-    
     (x, y) = sorted(zip(eigvals, eigvecs.T))[-1][1]
     theta = atan2(y, x)
     
-    print >> stderr, '  %.1f degrees at %d, %d' % (180 * theta / pi, xcenter, ycenter)
-    
+    # Translate and rotate points for easy division.
     translate = numpy.vstack([(xcenter, ycenter)] * len(points)).T
     rotate = numpy.array([[cos(theta), sin(theta)], [-sin(theta), cos(theta)]])
     unrotate = numpy.array([[cos(-theta), sin(-theta)], [-sin(-theta), cos(-theta)]])
-    
     xys = numpy.dot(rotate, xys - translate)
 
     #
@@ -341,6 +344,7 @@ def divide_points(points):
     points1 = [(x, y) for (x, y) in xys.T if x < 0]
     points2 = [(x, y) for (x, y) in xys.T if x >= 0]
     
+    # Return points to original positions in two groups.
     translate1 = numpy.vstack([(xcenter, ycenter)] * len(points1)).T
     translate2 = numpy.vstack([(xcenter, ycenter)] * len(points2)).T
 
@@ -350,8 +354,7 @@ def divide_points(points):
     points1 = [(x, y) for (x, y) in xys1.T]
     points2 = [(x, y) for (x, y) in xys2.T]
     
-    print >> stderr, ' ', xys1.shape, 'and', xys2.shape
-    print >> stderr, ' ', len(points1), 'and', len(points2), 'points'
+    print >> stderr, ' ', len(points), 'points split along', int(180 * theta / pi), 'degree axis'
     
     return points1, points2
 
