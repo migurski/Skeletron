@@ -52,7 +52,7 @@ except ImportError:
 
 mercator = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over')
 
-from .util import simplify_line_vw, simplify_line_dp, densify_line, polygon_rings
+from .util import simplify_line_vw, simplify_line_dp, densify_line, polygon_rings, cascaded_union
 
 class _QHullFailure (Exception): pass
 class _SignalAlarm (Exception): pass
@@ -109,7 +109,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
     
     for polygon in getattr(multipoly, 'geoms', [multipoly]):
         try:
-            skeletons = polygon_skeleton_graphs(polygon, density)
+            skeletons = polygon_skeleton_graphs(polygon, buffer, density)
         
         except _QHullFailure, e:
             #
@@ -268,9 +268,9 @@ def multiline_polygon(multiline, buffer=20):
     # and dissolve them together like peasants.
     #
     polys = [line.buffer(buffer, 3) for line in multiline.geoms]
-    return reduce(lambda a, b: a.union(b), polys)
+    return cascaded_union(polys)
 
-def polygon_skeleton_graphs(polygon, density=10):
+def polygon_skeleton_graphs(polygon, buffer=20, density=10):
     """ Given a buffer polygon, return a list of skeleton graphs.
     """
     points = []
@@ -300,20 +300,21 @@ def polygon_skeleton_graphs(polygon, density=10):
     # major axes, and make a skeleton for each subdivision.
     #
     while point_lists:
-        points1, points2 = divide_points(point_lists.pop(0))
-    
-        for points in (points1, points2):
-            if len(points) < max_points:
-                skeletons.append(polygon_dots_skeleton(polygon, points))
+        points1, points2, poly1, poly2 = divide_points(point_lists.pop(0))
+        
+        for (_points, _poly) in ((points1, poly1), (points2, poly2)):
+            if len(_points) < max_points:
+                _poly = _poly.buffer(buffer, 3).intersection(polygon)
+                skeletons.append(polygon_dots_skeleton(_poly, _points))
             else:
-                point_lists.append(points)
+                point_lists.append(_points)
     
     return skeletons
 
 def divide_points(points):
-    ''' Divide a list of (x, y) tuples along their major axis, return two lists.
+    ''' Divide a list of (x, y) tuples into two lists and two bounding polygons.
     
-        Use eigenvectors to determine the major axis and split on that axis,
+        Use eigenvectors to determine the major axis and split on it,
         at the center (average) of the input point collection.
         
         Eigenbusiness cribbed from
@@ -344,6 +345,11 @@ def divide_points(points):
     points1 = [(x, y) for (x, y) in xys.T if x < 0]
     points2 = [(x, y) for (x, y) in xys.T if x >= 0]
     
+    (xmin, ymin), (xmax, ymax) = xys.min(1), xys.max(1)
+    
+    bbox1 = numpy.array([(0, ymin), (0, ymax), (xmin, ymax), (xmin, ymin)]).T
+    bbox2 = numpy.array([(0, ymin), (0, ymax), (xmax, ymax), (xmax, ymin)]).T
+    
     # Return points to original positions in two groups.
     translate1 = numpy.vstack([(xcenter, ycenter)] * len(points1)).T
     translate2 = numpy.vstack([(xcenter, ycenter)] * len(points2)).T
@@ -354,9 +360,15 @@ def divide_points(points):
     points1 = [(x, y) for (x, y) in xys1.T]
     points2 = [(x, y) for (x, y) in xys2.T]
     
+    bbox1 = numpy.dot(unrotate, bbox1) + translate1[:,:4]
+    bbox2 = numpy.dot(unrotate, bbox2) + translate2[:,:4]
+    
+    polygon1 = Polygon([(x, y) for (x, y) in bbox1.T])
+    polygon2 = Polygon([(x, y) for (x, y) in bbox2.T])
+    
     print >> stderr, ' ', len(points), 'points split along', int(180 * theta / pi), 'degree axis'
     
-    return points1, points2
+    return points1, points2, polygon1, polygon2
 
 def polygon_dots_skeleton(polygon, points):
     '''

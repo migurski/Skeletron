@@ -5,6 +5,7 @@ from gzip import GzipFile
 from bz2 import BZ2File
 
 from shapely.geometry import Polygon
+from shapely.ops import cascaded_union
 
 def simplify_line_vw(points, small_area=100):
     """ Simplify a line of points using V-W down to the given area.
