@@ -6,13 +6,16 @@ using the "network", "ref" and "modifier" tags to group relations.
 More on route relations: http://wiki.openstreetmap.org/wiki/Relation:route
 """
 
-from sys import argv, stdin, stderr, stdout
+from sys import argv, stdin, stdout
 from itertools import combinations
 from optparse import OptionParser
 from csv import DictReader
 from re import compile
 from json import dump
 from math import pi
+
+import logging
+logging.basicConfig(level=logging.DEBUG, format='%(levelname)08s - %(message)s')
 
 from Skeletron import waynode_multilines
 from Skeletron.input import parse_route_relation_waynodes
@@ -71,8 +74,7 @@ if __name__ == '__main__':
             return dict(network=network, ref=ref, modifier=modifier, highway=highway,
                         zoomlevel=options.zoom, pixelwidth=options.width)
 
-    print >> stderr, 'Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs
-    print >> stderr, '-' * 20
+    logging.info('Buffer: %(buffer).1f, density: %(density).1f, minimum length: %(min_length).1f, minimum area: %(min_area).1f.' % kwargs)
 
     geojson = multilines_geojson(multilines, key_properties, **kwargs)
     output = open_file(output_file, 'w')

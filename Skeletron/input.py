@@ -1,5 +1,6 @@
 from copy import deepcopy
 from xml.parsers.expat import ParserCreate
+from logging import debug
 
 def name_key(tags):
     """ Convert way tags to name keys.
@@ -156,7 +157,7 @@ def parse_route_relation_waynodes(input, merge_highways):
             
             rel_ways[len(rel_ways)] = rel_way
     
-    print len(rel_ways), 'rel_ways', len(nodes), 'nodes'
+    debug('%d rel_ways, %d nodes' % (len(rel_ways), len(nodes)))
     
     if merge_highways == 'largest':
         #
@@ -168,7 +169,7 @@ def parse_route_relation_waynodes(input, merge_highways):
             highway = net_refs[(network, ref, modifier)]
             rel_ways[key]['key'] = network, ref, modifier, highway
     
-    print len(rel_ways), 'rel_ways', len(nodes), 'nodes'
+    debug('%d rel_ways, %d nodes' % (len(rel_ways), len(nodes)))
     
     return rel_ways, nodes
 

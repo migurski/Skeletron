@@ -28,7 +28,6 @@ skeletron-osm-route-rels.py
 """
 __version__ = '0.5.1'
 
-from sys import stderr
 from subprocess import Popen, PIPE
 from itertools import combinations
 from tempfile import mkstemp
@@ -36,7 +35,9 @@ from os import write, close
 from math import sin, cos, pi
 from math import ceil, atan2
 from time import time
+
 import signal
+import logging
     
 import numpy, numpy.linalg
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon
@@ -89,14 +90,12 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
         return False
     
     geoms = hasattr(multiline, 'geoms') and multiline.geoms or [multiline]
-    counts = [len(geom.coords) for geom in geoms]
-
-    print >> stderr, ' ', len(geoms), 'linear parts with', sum(counts), 'points',
+    pre_counts = [len(geom.coords) for geom in geoms]
     
     geoms = [simplify_line_dp(list(geom.coords), buffer) for geom in geoms]
     counts = [len(geom) for geom in geoms]
 
-    print >> stderr, 'reduced to', sum(counts), 'points.'
+    logging.debug('simplified %d points to %d in %d linestrings' % (sum(pre_counts), sum(counts), len(geoms)))
     
     multiline = MultiLineString(geoms)
     multipoly = multiline_polygon(multiline, buffer)
@@ -116,7 +115,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
             # QHull failures here are usually signs of tiny geometries,
             # so they are usually fine to ignore completely and move on.
             #
-            print >> stderr, ' -QHull failure:', e
+            logging.error('QHull failure: %s' % e)
             
             handle, fname = mkstemp(dir='.', prefix='qhull-failure-', suffix='.txt')
             write(handle, 'Error: %s\nDensity: %.6f\nPolygon: %s\n' % (e, density, str(polygon)))
@@ -133,7 +132,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
         points += sum(map(len, routes))
         lines.extend([simplify_line_vw(route, min_area) for route in routes])
     
-    print >> stderr, ' ', points, 'centerline points reduced to', sum(map(len, lines)), 'final points.'
+    logging.debug('selected %d final points from %d graph route points' % (sum(map(len, lines)), points))
     
     if not lines:
         return False
@@ -302,6 +301,8 @@ def polygon_skeleton_graphs(polygon, buffer=20, density=10):
     while point_lists:
         points1, points2, poly1, poly2 = divide_points(point_lists.pop(0))
         
+        logging.debug('split %d points into %d + %d' % (len(points1 + points2), len(points1), len(points2)))
+        
         for (_points, _poly) in ((points1, poly1), (points2, poly2)):
             if len(_points) < max_points:
                 _poly = _poly.buffer(buffer, 3).intersection(polygon)
@@ -366,8 +367,6 @@ def divide_points(points):
     polygon1 = Polygon([(x, y) for (x, y) in bbox1.T])
     polygon2 = Polygon([(x, y) for (x, y) in bbox2.T])
     
-    print >> stderr, ' ', len(points), 'points split along', int(180 * theta / pi), 'degree axis'
-    
     return points1, points2, polygon1, polygon2
 
 def polygon_dots_skeleton(polygon, points):
@@ -375,8 +374,6 @@ def polygon_dots_skeleton(polygon, points):
     '''
     skeleton = Graph()
 
-    print >> stderr, ' ', len(points), 'perimeter points',
-    
     rbox = '\n'.join( ['2', str(len(points))] + ['%.2f %.2f' % (x, y) for (x, y) in points] + [''] )
     
     qvoronoi = Popen('qvoronoi o'.split(), stdin=PIPE, stdout=PIPE)
@@ -417,7 +414,7 @@ def polygon_dots_skeleton(polygon, points):
                     skeleton.remove_node(index)
                     removing = True
     
-    print >> stderr, 'contain', len(skeleton.edge), 'internal edges.'
+    logging.debug('found %d skeleton edges' % len(skeleton.edge))
     
     return skeleton
 
