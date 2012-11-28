@@ -108,7 +108,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
     
     for polygon in getattr(multipoly, 'geoms', [multipoly]):
         try:
-            skeleton = polygon_skeleton(polygon, density)
+            skeletons = polygon_skeleton_graphs(polygon, density)
         
         except _QHullFailure, e:
             #
@@ -123,7 +123,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
             continue
         
         try:
-            routes = skeleton_routes(skeleton, min_length)
+            routes = skeleton_routes(skeletons, min_length)
 
         except _SignalAlarm, e:
             # An alarm signal here means that graph_routes() went overtime.
@@ -269,24 +269,48 @@ def multiline_polygon(multiline, buffer=20):
     polys = [line.buffer(buffer, 3) for line in multiline.geoms]
     return reduce(lambda a, b: a.union(b), polys)
 
-def polygon_skeleton(polygon, density=10):
-    """ Given a buffer polygon, return a skeleton graph.
+def polygon_skeleton_graphs(polygon, density=10):
+    """ Given a buffer polygon, return a list of skeleton graphs.
     """
     points = []
     
+    #
+    # Build up a list of points by densifying the perimeter of each part
+    # of the polygon, resulting in a possibly lengthy list of (x, y) pairs.
+    #
     for ring in polygon_rings(polygon):
         points.extend(densify_line(list(ring.coords), density))
     
     if len(points) <= 4:
-        # don't bother with this one
+        # Don't bother with very short lists of points.
         return Graph()
     
-    points_major_axis(points)
+    max_points = 5000
 
-    return polygon_dots_skeleton(polygon, points)
+    if len(points) < max_points:
+        # Don't subdivide point collections smaller than max_points.
+        return [polygon_dots_skeleton(polygon, points)]
+    
+    point_lists = [points]
+    skeletons = []
+    
+    #
+    # Subdivide large collections of points along their
+    # major axes, and make a skeleton for each subdivision.
+    #
+    while point_lists:
+        points1, points2 = divide_points(point_lists.pop(0))
+    
+        for points in (points1, points2):
+            if len(points) < max_points:
+                skeletons.append(polygon_dots_skeleton(polygon, points))
+            else:
+                point_lists.append(points)
+    
+    return skeletons
 
-def points_major_axis(points):
-    ''' Mess around with the major axis of a list of (x, y) tuples.
+def divide_points(points):
+    ''' Divide a list of (x, y) tuples along their major axis, return two lists.
     '''
     # cribbed from http://stackoverflow.com/questions/7059841/estimating-aspect-ratio-of-a-convex-hull
     import numpy, numpy.linalg
@@ -298,6 +322,8 @@ def points_major_axis(points):
     
     (x, y) = sorted(zip(eigvals, eigvecs.T))[-1][1]
     theta = atan2(y, x)
+    
+    print >> stderr, '  %.1f degrees at %d, %d' % (180 * theta / pi, xcenter, ycenter)
     
     translate = numpy.vstack([(xcenter, ycenter)] * len(points)).T
     rotate = numpy.array([[cos(theta), sin(theta)], [-sin(theta), cos(theta)]])
@@ -312,9 +338,22 @@ def points_major_axis(points):
     width, height = xys.max(1) - xys.min(1)
     assert width > height
     
-    xys = numpy.dot(unrotate, xys) + translate
+    points1 = [(x, y) for (x, y) in xys.T if x < 0]
+    points2 = [(x, y) for (x, y) in xys.T if x >= 0]
     
-    print >> stderr, '  %.1f degrees at %d, %d' % (180 * theta / pi, xcenter, ycenter)
+    translate1 = numpy.vstack([(xcenter, ycenter)] * len(points1)).T
+    translate2 = numpy.vstack([(xcenter, ycenter)] * len(points2)).T
+
+    xys1 = numpy.dot(unrotate, numpy.vstack(points1).T) + translate1
+    xys2 = numpy.dot(unrotate, numpy.vstack(points2).T) + translate2
+    
+    points1 = [(x, y) for (x, y) in xys1.T]
+    points2 = [(x, y) for (x, y) in xys2.T]
+    
+    print >> stderr, ' ', xys1.shape, 'and', xys2.shape
+    print >> stderr, ' ', len(points1), 'and', len(points2), 'points'
+    
+    return points1, points2
 
 def polygon_dots_skeleton(polygon, points):
     '''
@@ -367,9 +406,12 @@ def polygon_dots_skeleton(polygon, points):
     
     return skeleton
 
-def skeleton_routes(skeleton, min_length=25):
-    """ Given a skeleton graph, return a series of (x, y) list routes ordered longest to shortest.
+def skeleton_routes(skeletons, min_length=25):
+    """ Given a list of skeleton graphs, return a series of (x, y) list routes ordered longest to shortest.
     """
-    routes = graph_routes(skeleton, True)
+    routes = []
+    
+    for skeleton in skeletons:
+        routes.extend(graph_routes(skeleton, True))
     
     return [route for route in routes if LineString(route).length > min_length]
