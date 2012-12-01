@@ -127,7 +127,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
 
         except _SignalAlarm, e:
             # An alarm signal here means that graph_routes() went overtime.
-            raise _GraphRoutesOvertime(skeleton)
+            raise _GraphRoutesOvertime(skeletons)
         
         points += sum(map(len, routes))
         lines.extend([simplify_line_vw(route, min_area) for route in routes])

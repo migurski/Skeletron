@@ -15,7 +15,7 @@ def multilines_geojson(multilines, key_properties, buffer, density, min_length, 
 
     for (key, multiline) in sorted(multilines.items()):
         
-        logging.info('%s...' % ', '.join(key).encode('ascii', 'ignore'))
+        logging.info('%s...' % ', '.join([(p or '').encode('ascii', 'ignore') for p in key]))
         
         try:
             centerline = multiline_centerline(multiline, buffer, density, min_length, min_area)
