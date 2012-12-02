@@ -339,12 +339,10 @@ def divide_points(points):
     xys = numpy.dot(rotate, xys - translate)
 
     #
-    # Now, xys is an array of points with the center at (0, 0)
-    # and rotated so that the major axis is horizonal.
+    # Now, xys is an array of points with the center at (0, 0) and rotated
+    # so that the major axis is horizonal, so it's probably safe to cut it
+    # in half at x=0 and operate the two sides independently.
     #
-    width, height = xys.max(1) - xys.min(1)
-    assert width > height
-    
     points1 = [(x, y) for (x, y) in xys.T if x < 0]
     points2 = [(x, y) for (x, y) in xys.T if x >= 0]
     
