@@ -23,6 +23,19 @@ def cascaded_union(polys):
     poly2 = cascaded_union(polys[half:])
     
     return poly1.union(poly2)
+
+def point_distance(a, b):
+    '''
+    '''
+    try:
+        return a.distance(b)
+
+    except ValueError, e:
+        if str(e) != 'Prepared geometries cannot be operated on':
+            raise
+        
+        # Shapely sometimes throws this exception, for reasons unclear to me.
+        return hypot(a.x - b.x, a.y - b.y)
     
 def simplify_line_vw(points, small_area=100):
     """ Simplify a line of points using V-W down to the given area.

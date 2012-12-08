@@ -53,7 +53,8 @@ except ImportError:
 
 mercator = Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over')
 
-from .util import simplify_line_vw, simplify_line_dp, densify_line, polygon_rings, cascaded_union
+from .util import simplify_line_vw, simplify_line_dp, densify_line, \
+                  polygon_rings, cascaded_union, point_distance
 
 class _QHullFailure (Exception): pass
 class _SignalAlarm (Exception): pass
@@ -190,7 +191,7 @@ def graph_routes(graph, find_longest, time_coefficient=0.02):
     
     # heuristic function for A* path-finding functions, see also:
     # http://networkx.lanl.gov/reference/algorithms.shortest_paths.html#module-networkx.algorithms.shortest_paths.astar
-    heuristic = lambda n1, n2: _graph.node[n1]['point'].distance(_graph.node[n2]['point'])
+    heuristic = lambda n1, n2: point_distance(_graph.node[n1]['point'], _graph.node[n2]['point'])
     
     routes = []
     
@@ -210,7 +211,7 @@ def graph_routes(graph, find_longest, time_coefficient=0.02):
             neighbor = _graph.neighbors(node)[0]
             leaves = [node, neighbor]
 
-        distances = [(_graph.node[v]['point'].distance(_graph.node[w]['point']), v, w)
+        distances = [(point_distance(_graph.node[v]['point'], _graph.node[w]['point']), v, w)
                      for (v, w) in combinations(leaves, 2)]
         
         for (distance, v, w) in sorted(distances, reverse=find_longest):
