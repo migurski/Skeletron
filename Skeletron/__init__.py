@@ -260,6 +260,18 @@ def waynode_multilines(ways, nodes):
     
     return multilines
 
+def geometry_multiline(geom):
+    '''
+    '''
+    if geom.type not in ('LineString', 'MultiLineString'):
+        raise ValueError("Can't generalize a %s geometry" % geom.type)
+    
+    geoms = geom.geoms if hasattr(geom, 'geoms') else [geom]
+    coords = [[mercator(x, y) for (x, y) in line.coords] for line in geoms]
+    projected = MultiLineString(coords)
+    
+    return projected
+
 def multiline_polygon(multiline, buffer=20):
     """ Given a multilinestring, returns a buffered polygon.
     """
