@@ -36,7 +36,9 @@ from math import sin, cos, pi
 from math import ceil, atan2
 from time import time
 
-import signal
+from threading import Timer
+from thread import interrupt_main
+
 import logging
     
 import numpy, numpy.linalg
@@ -62,6 +64,9 @@ class _SignalAlarm (Exception): pass
 class _GraphRoutesOvertime (Exception):
     def __init__(self, graph):
         self.graph = graph
+
+def timeout():
+    interrupt_main()
 
 def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_area=100):
     """ Coalesce a linear street network to a centerline.
@@ -140,14 +145,33 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
     
     return MultiLineString(lines)
 
-def _graph_routes_took_too_long(signum, frame):
-    if signum == signal.SIGALRM:
-        raise _SignalAlarm()
-    else:
-        raise Exception("Unexpected signal: %s" % signum)
-
 def graph_routes(graph, find_longest, time_coefficient=0.02):
     """ Return a list of routes through a network as (x, y) pair lists, with no edge repeated.
+    
+        Use a thread timer to check for time overruns; see _graph_routes_main()
+        for in-thread logic.
+    """
+    #
+    # Before we do anything else, set a time limit to deal with the occasional
+    # halting problem on larger graphs. Use a threading Timer to check time.
+    #
+    time_limit = int(ceil(time_coefficient * graph.number_of_nodes()))
+
+    try:
+        t = Timer(time_limit, timeout)
+        t.start()
+        routes = _graph_routes_main(graph, find_longest, time_coefficient)
+        t.cancel()
+        return routes
+    
+    except:
+        t.cancel()
+        raise _SignalAlarm('Timeout')
+
+def _graph_routes_main(graph, find_longest, time_coefficient=0.02):
+    """ Return a list of routes through a network as (x, y) pair lists, with no edge repeated.
+    
+        Called from graph_routes().
     
         Each node in the graph must have a "point" attribute with a Point object.
         
@@ -172,15 +196,6 @@ def graph_routes(graph, find_longest, time_coefficient=0.02):
         - Green trend line: y = 2.772e-5x^1.3176
         - Black upper bounds: y = 0.000001x^2
     """
-    #
-    # Before we do anything else, set a time limit to deal with the occasional
-    # halting problem on larger graphs. Using signals here seems safe because
-    # Skeletron is intended to be used in single-threaded processes.
-    #
-    time_limit = int(ceil(time_coefficient * graph.number_of_nodes()))
-    signal.signal(signal.SIGALRM, _graph_routes_took_too_long)
-    signal.alarm(time_limit)
-    
     # it's destructive
     _graph = graph.copy()
     
@@ -231,7 +246,6 @@ def graph_routes(graph, find_longest, time_coefficient=0.02):
             # move on to the next possible route
             break
     
-    signal.alarm(0)
     print >> open('graph-routes-log.txt', 'a'), start_nodes, (time() - start_time)
 
     return routes
