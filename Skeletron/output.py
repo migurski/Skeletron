@@ -6,7 +6,7 @@ import logging
 
 from shapely.geometry import LineString, MultiLineString
 
-from . import multiline_centerline, mercator, _GraphRoutesOvertime
+from . import multigeom_centerline, mercator, _GraphRoutesOvertime
 
 def multilines_geojson(multilines, key_properties, buffer, density, min_length, min_area):
     """
@@ -18,7 +18,7 @@ def multilines_geojson(multilines, key_properties, buffer, density, min_length, 
         logging.info('%s...' % ', '.join([(p or '').encode('ascii', 'ignore') for p in key]))
         
         try:
-            centerline = multiline_centerline(multiline, buffer, density, min_length, min_area)
+            centerline = multigeom_centerline(multiline, buffer, density, min_length, min_area)
         
         except _GraphRoutesOvertime, e:
             #
@@ -49,9 +49,10 @@ def generalized_multiline(multiline, buffer, density, min_length, min_area):
     '''
     '''
     try:
-        centerline = multiline_centerline(multiline, buffer, density, min_length, min_area)
+        centerline = multigeom_centerline(multiline, buffer, density, min_length, min_area)
     
     except Exception, e:
+        raise
         logging.error(e)
         return None
     

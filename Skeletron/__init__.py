@@ -68,7 +68,41 @@ class _GraphRoutesOvertime (Exception):
 def timeout():
     interrupt_main()
 
-def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_area=100):
+def _buffered_multiline_polygon(multiline, buffer):
+    ''' Return a polygon shell with the given buffer around a multiline.
+    '''
+    lines = multiline.geoms
+    pre_count = sum([len(line.coords) for line in lines])
+    
+    lines = [simplify_line_dp(list(line.coords), buffer) for line in lines]
+    count = sum([len(line) for line in lines])
+
+    logging.debug('simplified %d points to %d in %d linestrings' % (pre_count, count, len(lines)))
+    
+    multiline = MultiLineString(lines)
+    return multiline_polygon(multiline, buffer)
+
+def _buffered_multipoly_polygon(multipoly, buffer):
+    ''' Return a polygon shell with the given buffer around a multipolygon.
+    '''
+    polygons = []
+    pre_count, count = 0, 0
+    
+    for poly in multipoly.geoms:
+        rings = [poly.exterior] + list(poly.interiors)
+        pre_count += sum([len(ring.coords) for ring in rings])
+        
+        lines = [simplify_line_dp(list(ring.coords), buffer) for ring in rings]
+        count += sum([len(line) for line in lines])
+        
+        polygons.append(Polygon(rings[0], rings[1:]))
+
+    logging.debug('simplified %d points to %d in %d polygons' % (pre_count, count, len(polygons)))
+    
+    polygons = [poly.buffer(buffer, 3) for poly in polygons]
+    return cascaded_union(polygons)
+
+def multigeom_centerline(multigeom, buffer=20, density=10, min_length=40, min_area=100):
     """ Coalesce a linear street network to a centerline.
     
         Accepts and returns instances of shapely LineString and MultiLineString.
@@ -92,19 +126,17 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
             generalization by util.simplify_line_vw(), should be approximately
             one quarter of buffer squared.
     """
-    if not multiline:
+    if not multigeom:
         return False
     
-    geoms = hasattr(multiline, 'geoms') and multiline.geoms or [multiline]
-    pre_counts = [len(geom.coords) for geom in geoms]
+    if multigeom.type == 'MultiLineString':
+        buffered = _buffered_multiline_polygon(multigeom, buffer)
+        
+    elif multigeom.type == 'MultiPolygon':
+        buffered = _buffered_multipoly_polygon(multigeom, buffer)
     
-    geoms = [simplify_line_dp(list(geom.coords), buffer) for geom in geoms]
-    counts = [len(geom) for geom in geoms]
-
-    logging.debug('simplified %d points to %d in %d linestrings' % (sum(pre_counts), sum(counts), len(geoms)))
-    
-    multiline = MultiLineString(geoms)
-    multipoly = multiline_polygon(multiline, buffer)
+    else:
+        raise ValueError(multigeom.type)
     
     lines, points = [], 0
     
@@ -112,7 +144,7 @@ def multiline_centerline(multiline, buffer=20, density=10, min_length=40, min_ar
     # Iterate over each constituent buffer polygon, extending the skeleton.
     #
     
-    for polygon in getattr(multipoly, 'geoms', [multipoly]):
+    for polygon in getattr(buffered, 'geoms', [buffered]):
         try:
             skeletons = polygon_skeleton_graphs(polygon, buffer, density)
         
@@ -273,6 +305,28 @@ def waynode_multilines(ways, nodes):
         multilines[key] = MultiLineString(lines)
     
     return multilines
+
+def _m(geom):
+    ''' Project the coordinates of a geometry such as a line or ring.
+    '''
+    return [mercator(x, y) for (x, y) in geom.coords]
+
+def projected_multigeometry(geom):
+    ''' Accept an unprojected geometry and return a projected multigeometry.
+    '''
+    geoms = getattr(geom, 'geoms', [geom])
+    
+    if geom.type in ('LineString', 'MultiLineString'):
+        projected = MultiLineString(map(_m, geoms))
+    
+    elif geom.type in ('Polygon', 'MultiPolygon'):
+        parts = [(_m(poly.exterior), map(_m, poly.interiors)) for poly in geoms]
+        projected = MultiPolygon(parts)
+    
+    else:
+        raise ValueError("Can't generalize a %s geometry" % geom.type)
+    
+    return projected
 
 def geometry_multiline(geom):
     '''

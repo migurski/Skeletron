@@ -3,7 +3,7 @@ from math import pi
 
 from shapely.geometry import asShape
 
-from Skeletron import geometry_multiline
+from Skeletron import projected_multigeometry
 from Skeletron.output import generalized_multiline
 
 earth_radius = 6378137
@@ -17,8 +17,8 @@ def generalize(feature, width, zoom):
     kwargs = dict(buffer=buffer, density=buffer/2, min_length=8*buffer, min_area=(buffer**2)/4)
     
     geom = asShape(feature['geometry'])
-    multiline = geometry_multiline(geom)
-    generalized = generalized_multiline(multiline, **kwargs)
+    multigeom = projected_multigeometry(geom)
+    generalized = generalized_multiline(multigeom, **kwargs)
     
     if generalized is None:
         return False
@@ -29,9 +29,9 @@ def generalize(feature, width, zoom):
 
 if __name__ == '__main__':
 
-    geojson = load(open('oakland.osm.json'))
+    geojson = load(open('oakland-sample.json'))
     
-    features = [generalize(feature, 15, 12) for feature in geojson['features']]
+    features = [generalize(feature, 15, 15) for feature in geojson['features']]
     geojson['features'] = filter(None, features)
     
     dump(geojson, open('output.json', 'w'))
