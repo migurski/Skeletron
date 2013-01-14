@@ -10,8 +10,8 @@ def zoom_buffer(width_px, zoom):
     '''
     '''
     zoom_pixels = 2**(zoom + 8)
-    earth_width_px = 2 * pi * 6378137
-    meters_per_pixel = earth_width_px / zoom_pixels
+    earth_width_meters = 2 * pi * 6378137
+    meters_per_pixel = earth_width_meters / zoom_pixels
     buffer_meters = meters_per_pixel * width_px / 2
     
     return buffer_meters
