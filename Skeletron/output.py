@@ -11,7 +11,7 @@ from . import multigeom_centerline, mercator, _GraphRoutesOvertime, projected_mu
 from .util import zoom_buffer
 
 def generalize_geojson_feature(feature, width, zoom):
-    ''' Run one GeoJSON features through Skeletron and return it.
+    ''' Run one GeoJSON feature through Skeletron and return it.
     
         If generalization fails, return False.
     '''
@@ -33,6 +33,24 @@ def generalize_geojson_feature(feature, width, zoom):
     feature['geometry'] = generalized.__geo_interface__
     
     return feature
+
+def generalize_geometry(geometry, width, zoom):
+    ''' Run one geometry through Skeletron and return it.
+    
+        If generalization fails, return False.
+    '''
+    buffer = zoom_buffer(width, zoom)
+    kwargs = dict(buffer=buffer, density=buffer/2, min_length=8*buffer, min_area=(buffer**2)/4)
+    
+    logging.debug('Generalizing %s, %d wkb, %.1f buffer' % (geometry.type, len(geometry.wkb), buffer))
+    
+    multigeom = projected_multigeometry(geometry)
+    generalized = generalized_multiline(multigeom, **kwargs)
+    
+    if generalized is None:
+        return False
+    
+    return generalized
 
 def multilines_geojson(multilines, key_properties, buffer, density, min_length, min_area):
     """

@@ -1,10 +1,16 @@
 from sys import stdin, stdout
 from math import hypot, ceil, sqrt, pi
+from base64 import b64encode, b64decode
+from json import loads as json_decode
+from json import dumps as json_encode
+from cPickle import loads as unpickle
+from cPickle import dumps as pickle
 from os.path import splitext
 from gzip import GzipFile
 from bz2 import BZ2File
 
 from shapely.geometry import Polygon
+from shapely.wkb import loads as wkb_decode
 
 def zoom_buffer(width_px, zoom):
     '''
@@ -212,3 +218,35 @@ def open_file(name, mode='r'):
         return GzipFile(name, mode)
 
     return open(name, mode)
+
+def hadoop_feature_line(id, properties, geometry):
+    ''' Convert portions of a GeoJSON feature to a single line of text.
+    
+        Allows Hadoop to stream features from the mapper to the reducer.
+        See also skeletron-hadoop-mapper.py and skeletron-hadoop-reducer.py.
+    '''
+    line = [
+        json_encode(id),
+        ' ',
+        b64encode(pickle(sorted(list(properties.items())))),
+        '\t',
+        b64encode(geometry.wkb)
+        ]
+    
+    return ''.join(line)
+
+def hadoop_line_feature(line):
+    ''' Convert a correctly-formatted line of text to a GeoJSON feature.
+    
+        Allows Hadoop to stream features from the mapper to the reducer.
+        See also skeletron-hadoop-mapper.py and skeletron-hadoop-reducer.py.
+    '''
+    id, prop, geom = line.split()
+    
+    id = json_decode(id)
+    properties = dict(unpickle(b64decode(prop)))
+    geometry = wkb_decode(b64decode(geom))
+    
+    return dict(type='Feature', id=id,
+                properties=properties,
+                geometry=geometry.__geo_interface__)

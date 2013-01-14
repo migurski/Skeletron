@@ -1,3 +1,6 @@
+2013-01-13: 0.8.0
+- Added Hadoop streaming support via skeletron-hadoop-mapper.py and skeletron-hadoop-reducer.py.
+
 2013-01-13: 0.7.0
 - Added skeletron-generalize.py script for GeoJSON input/output.
 - Switched from signals to threads in Skeletron.graph_routes() for Windows compatibility.

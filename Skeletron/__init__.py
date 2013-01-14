@@ -30,7 +30,7 @@ skeletron-osm-route-rels.py
   using the "network", "ref" and "modifier" tags to group relations.
   More on route relations: http://wiki.openstreetmap.org/wiki/Relation:route
 """
-__version__ = '0.7.0'
+__version__ = '0.8.0'
 
 from subprocess import Popen, PIPE
 from itertools import combinations
