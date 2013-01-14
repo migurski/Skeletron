@@ -13,7 +13,11 @@ Required dependencies:
   - networkx (http://networkx.lanl.gov)
 
 You'd typically use it via one of the provided utility scripts, currently
-just these two:
+just these three:
+
+skeletron-generalize.py
+
+  Accepts GeoJSON input and generates GeoJSON output.
 
 skeletron-osm-streets.py
 
@@ -26,7 +30,7 @@ skeletron-osm-route-rels.py
   using the "network", "ref" and "modifier" tags to group relations.
   More on route relations: http://wiki.openstreetmap.org/wiki/Relation:route
 """
-__version__ = '0.6.0'
+__version__ = '0.7.0'
 
 from subprocess import Popen, PIPE
 from itertools import combinations

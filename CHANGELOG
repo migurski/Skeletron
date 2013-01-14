@@ -1,3 +1,8 @@
+2013-01-13: 0.7.0
+- Added skeletron-generalize.py script for GeoJSON input/output.
+- Switched from signals to threads in Skeletron.graph_routes() for Windows compatibility.
+- Fixed minor geometry bugs.
+
 2012-11-27: 0.6.0
 - Made skeleton-finding for very long routes more efficient through divide and conquer approach.
 
