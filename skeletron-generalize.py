@@ -1,18 +1,17 @@
 from json import load, dump
-from math import pi
 
 from shapely.geometry import asShape
 
 from Skeletron import projected_multigeometry
 from Skeletron.output import generalized_multiline
+from Skeletron.util import zoom_buffer
 
 earth_radius = 6378137
 
 def generalize(feature, width, zoom):
     '''
     '''
-    buffer = width / 2
-    buffer *= (2 * pi * earth_radius) / (2**(zoom + 8))
+    buffer = zoom_buffer(width, zoom)
     
     kwargs = dict(buffer=buffer, density=buffer/2, min_length=8*buffer, min_area=(buffer**2)/4)
     

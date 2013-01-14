@@ -1,10 +1,20 @@
 from sys import stdin, stdout
-from math import hypot, ceil, sqrt
+from math import hypot, ceil, sqrt, pi
 from os.path import splitext
 from gzip import GzipFile
 from bz2 import BZ2File
 
 from shapely.geometry import Polygon
+
+def zoom_buffer(width_px, zoom):
+    '''
+    '''
+    zoom_pixels = 2**(zoom + 8)
+    earth_width_px = 2 * pi * 6378137
+    meters_per_pixel = earth_width_px / zoom_pixels
+    buffer_meters = meters_per_pixel * width_px / 2
+    
+    return buffer_meters
 
 def cascaded_union(polys):
     '''
