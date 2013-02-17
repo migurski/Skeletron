@@ -235,8 +235,8 @@ def hadoop_feature_line(id, properties, geometry):
     
     return ''.join(line)
 
-def hadoop_line_feature(line):
-    ''' Convert a correctly-formatted line of text to a GeoJSON feature.
+def hadoop_line_features(line):
+    ''' Convert a correctly-formatted line of text to a list of GeoJSON features.
     
         Allows Hadoop to stream features from the mapper to the reducer.
         See also skeletron-hadoop-mapper.py and skeletron-hadoop-reducer.py.
@@ -247,6 +247,10 @@ def hadoop_line_feature(line):
     properties = dict(unpickle(b64decode(prop)))
     geometry = wkb_decode(b64decode(geom))
     
-    return dict(type='Feature', id=id,
-                properties=properties,
-                geometry=geometry.__geo_interface__)
+    parts = geometry.geoms if hasattr(geometry, 'geoms') else [geometry]
+    
+    return [dict(type='Feature', id=id, properties=properties,
+                 geometry=part.__geo_interface__)
+            for part
+            in parts
+            if hasattr(part, '__geo_interface__')]
