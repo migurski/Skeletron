@@ -7,6 +7,7 @@ Test usage:
 from sys import stdin, stdout
 from json import load, dumps
 from itertools import product
+from uuid import uuid1
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)08s - %(message)s')
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     
     for (feature, zoom) in product(geojson['features'], (12, 13, 14, 15, 16)):
 
-        id = feature.get('id', None)
+        id = str(uuid1())
         prop = feature.get('properties', {})
         geom = asShape(feature['geometry'])
     

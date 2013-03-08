@@ -1,3 +1,9 @@
+2013-03-07: 0.9.1
+- Reduced precision of output from skeletron-generalize. 
+
+2013-02-17: 0.9.0
+- Improved defensive error catching and switched to all-LineString output in hadoop reducer.
+
 2013-01-13: 0.8.0
 - Added Hadoop streaming support via skeletron-hadoop-mapper.py and skeletron-hadoop-reducer.py.
 
