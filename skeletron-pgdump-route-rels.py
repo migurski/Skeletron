@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from sys import stdout, stderr
 from bz2 import BZ2File
 from xml.etree.ElementTree import Element, ElementTree

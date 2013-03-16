@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from json import load, JSONEncoder
 from optparse import OptionParser
 from re import compile
