@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from json import load, JSONEncoder
 from optparse import OptionParser
+from itertools import repeat
 from re import compile
 import logging
 
@@ -14,7 +15,7 @@ optparser = OptionParser(usage="""%prog [options] <geojson input file> <geojson 
 
 Accepts GeoJSON input and generates GeoJSON output.""")
 
-defaults = dict(zoom=12, width=15, loglevel=logging.INFO)
+defaults = dict(zoom=12, width=15, single=False, loglevel=logging.INFO)
 
 optparser.set_defaults(**defaults)
 
@@ -23,6 +24,10 @@ optparser.add_option('-z', '--zoom', dest='zoom',
 
 optparser.add_option('-w', '--width', dest='width',
                      type='float', help='Line width at zoom level. Default value is %s.' % repr(defaults['width']))
+
+optparser.add_option('-s', '--single', dest='single',
+                     action='store_true',
+                     help='Convert multi-geometries into single geometries on output.')
 
 optparser.add_option('-v', '--verbose', dest='loglevel',
                      action='store_const', const=logging.DEBUG,
@@ -45,11 +50,27 @@ if __name__ == '__main__':
     input = load(open(input_file, 'r'))
     features = []
     
-    for input_feature in input['features']:
+    for (index, input_feature) in enumerate(input['features']):
         try:
-            features.append(generalize_geojson_feature(input_feature, options.width, options.zoom))
-        except:
-            pass
+            feature = generalize_geojson_feature(input_feature, options.width, options.zoom)
+            
+            if not feature:
+                continue
+
+        except Exception, err:
+            logging.error('Error on feature #%d: %s' % (index, err))
+
+        else:
+            if options.single and feature['geometry']['type'].startswith('Multi'):
+                coord = [part for part in feature['geometry']['coordinates']]
+                types = repeat(feature['geometry']['type'][5:])
+                props = repeat(feature['properties'])
+                
+                features.extend([dict(type='Feature', geometry=dict(coordinates=coords, type=type), properties=prop)
+                                 for (coords, type, prop) in zip(coord, types, props)])
+            
+            else:
+                features.append(feature)
     
     #
     # Output
