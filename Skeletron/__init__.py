@@ -191,7 +191,7 @@ def graph_routes(graph, find_longest, time_coefficient=0.02):
     # Before we do anything else, set a time limit to deal with the occasional
     # halting problem on larger graphs. Use a threading Timer to check time.
     #
-    time_limit = int(ceil(time_coefficient * graph.number_of_nodes()))
+    time_limit = 3 + int(ceil(time_coefficient * graph.number_of_nodes()))
 
     try:
         t = Timer(time_limit, timeout)
