@@ -43,7 +43,13 @@ if __name__ == '__main__':
     #
     
     input = load(open(input_file, 'r'))
-    features = [generalize_geojson_feature(feature, options.width, options.zoom) for feature in input['features']]
+    features = []
+    
+    for input_feature in input['features']:
+        try:
+            features.append(generalize_geojson_feature(input_feature, options.width, options.zoom))
+        except:
+            pass
     
     #
     # Output
